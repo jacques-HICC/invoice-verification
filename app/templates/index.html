@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice AI</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+        }
+
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #1e90ff;
+            color: white;
+            padding: 0.25rem 1rem;
+            text-align: center;
+            z-index: 1001;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .top-stats {
+            position: fixed;
+            top: 50px;
+            left: 0;
+            right: 0;
+            background-color: #f0f0f0;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-bottom: 1px solid #ccc;
+            z-index: 1000;
+            height: 60px;
+        }
+
+        main {
+            margin-top: 110px;
+            margin-bottom: 40px;
+            padding: 1rem;
+        }
+
+        main.console-expanded {
+            margin-bottom: 290px;
+        }
+
+        #sync-output-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 999;
+            background: #1e1e1e;
+        }
+
+        .console-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2d2d2d;
+            color: #ccc;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-top: 1px solid #444;
+            user-select: none;
+        }
+
+        .console-header:hover {
+            background: #3d3d3d;
+        }
+
+        #sync-output {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            height: 0;
+            overflow: hidden;
+            transition: height 0.3s ease;
+            text-align: left;
+        }
+
+        #sync-output.expanded {
+            height: 250px;
+            overflow-y: auto;
+            border-top: 1px solid #444;
+        }
+
+        .validation-section {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .invoice-preview, .fields-panel {
+            border: 1px solid #ddd;
+            padding: 1rem;
+            flex: 1;
+        }
+        
+        .invoice-preview img {
+            width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+        }
+
+        .page-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .page-navigation button {
+            padding: 0.5rem 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .page-navigation button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .page-navigation button:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .page-info {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .loading-preview {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .no-invoices {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        
+        .fields-panel form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        input, textarea, button {
+            padding: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        button {
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-left: 0.5rem;
+        }
+
+        .confidence-high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .ai-processing-section {
+            margin-bottom: 2rem;
+        }
+
+        .processing-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .processing-info h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.2rem;
+        }
+
+        .unprocessed-count {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+        }
+
+        .help-text {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .model-selector {
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .model-selector label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .model-selector select {
+            background: rgba(255,255,255,0.9);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #333;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .model-selector select:hover {
+            background: white;
+        }
+
+        .process-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .process-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .process-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+        }
+
+        .input-group {
+            margin: 1.5rem 0;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+
+        .input-group input[type="range"] {
+            width: 100%;
+        }
+
+        .input-group input[type="number"] {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+        }
+
+        .range-display {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 1rem 0;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .quick-btn {
+            flex: 1;
+            padding: 0.5rem;
+            background: #f0f0f0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .quick-btn:hover {
+            background: #e0e0e0;
+            border-color: #667eea;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .modal-actions button {
+            flex: 1;
+            padding: 0.75rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 6px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .action-buttons button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🧾 AI-Assisted Invoice Validation</h1>
+    </header>
+    
+    <div class="top-stats">
+        <div>
+            <div>Total Invoices</div>
+            <div id="total-invoices">0</div>
+        </div>
+        <div>
+            <div>Processed by AI</div>
+            <div id="ai-processed">0</div>
+        </div>
+        <div>
+            <div>Verified</div>
+            <div id="verified">0</div>
+        </div>
+        <button onclick="startSync()" title="Click to add any new invoices from GCDocs to the SharePoint tracker">
+            Scan for new invoices
+        </button>
+    </div>
+
+    <main id="main-content">
+        <section class="ai-processing-section">
+            <div class="processing-card">
+                <div class="processing-info">
+                    <h3>📋 Unprocessed Invoices</h3>
+                    <div class="unprocessed-count" id="unprocessed-count">0</div>
+                    <p class="help-text">Invoices waiting for AI extraction</p>
+                    <div class="model-selector">
+                        <label for="model-select">Model:</label>
+                        <select id="model-select">
+                            <option value="">Loading models...</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="process-btn" onclick="openProcessDialog()" id="process-btn">
+                    🤖 Process with AI
+                </button>
+            </div>
+        </section>
+
+        <section class="validation-section">
+            <div class="invoice-preview">
+                <div class="preview-header">
+                    <div class="page-navigation" id="page-navigation" style="display: none;">
+                        <button id="prev-page-btn" onclick="previousPage()">◀ Previous</button>
+                        <span class="page-info">
+                            Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+                        </span>
+                        <button id="next-page-btn" onclick="nextPage()">Next ▶</button>
+                    </div>
+                    <h2>Invoice Preview</h2>
+                </div>
+
+                <div id="invoice-display">
+                    <div class="loading-preview">
+                        Loading invoice...
+                    </div>
+                </div>
+            </div>
+
+            <div class="fields-panel">
+                <h2>
+                    Extracted Information
+                    <span id="confidence-badge" class="confidence-badge"></span>
+                </h2>
+                <form id="validation-form">
+                    <input type="hidden" id="node-id" name="node_id">
+                    
+                    <label>Vendor/Company Name</label>
+                    <input type="text" id="company-name" name="company_name">
+
+                    <label>Invoice Number</label>
+                    <input type="text" id="invoice-number" name="invoice_number">
+
+                    <label>Invoice Date</label>
+                    <input type="date" id="invoice-date" name="invoice_date">
+
+                    <label>Total Amount</label>
+                    <input type="number" step="0.01" id="total-amount" name="total_amount">
+
+                    <label>Notes</label>
+                    <textarea id="notes" name="notes" rows="3"></textarea>
+
+                    <div class="action-buttons">
+                        <button type="button" onclick="saveAndNext()" id="save-next-btn">💾 Save & Next ➡️</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="sync-output-container">
+        <div class="console-header" onclick="toggleConsole()">
+            <span>Console</span>
+            <span id="console-toggle">▲</span>
+        </div>
+        <div id="sync-output"></div>
+    </div>
+
+    <div id="process-modal" class="modal">
+        <div class="modal-content">
+            <h2>🤖 Process Invoices with AI</h2>
+            <p>Select how many invoices to process:</p>
+            
+            <div class="range-display" id="process-count-display">10</div>
+            
+            <div class="input-group">
+                <input 
+                    type="range" 
+                    id="process-count-slider" 
+                    min="1" 
+                    max="100" 
+                    value="10"
+                    oninput="updateProcessCount(this.value)"
+                >
+            </div>
+
+            <div class="input-group">
+                <label>Or enter a specific number:</label>
+                <input 
+                    type="number" 
+                    id="process-count-input" 
+                    min="1" 
+                    value="10"
+                    onchange="updateProcessCount(this.value)"
+                >
+            </div>
+
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="setProcessCount(10)">10 invoices</button>
+                <button class="quick-btn" onclick="setProcessCount(50)">50 invoices</button>
+                <button class="quick-btn" onclick="setProcessCount('all')">Process All</button>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeProcessDialog()">Cancel</button>
+                <button class="btn-primary" onclick="startProcessing()">Start Processing</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let currentInvoice = null;
+    let currentPage = 0;
+    let totalPages = 1;
+
+    function toggleConsole() {
+        const output = document.getElementById('sync-output');
+        const toggle = document.getElementById('console-toggle');
+        const main = document.getElementById('main-content');
+        
+        output.classList.toggle('expanded');
+        main.classList.toggle('console-expanded');
+        toggle.textContent = output.classList.contains('expanded') ? '▼' : '▲';
+    }
+
+    async function fetchStats() {
+        const res = await fetch('/sharepoint_stats');
+        const data = await res.json();
+        
+        const total = data.total || 0;
+        const aiProcessed = data.ai_processed || 0;
+        const verified = data.human_validated || 0;
+        const unprocessed = total - aiProcessed;
+        
+        document.getElementById('total-invoices').textContent = total;
+        document.getElementById('ai-processed').textContent = aiProcessed;
+        document.getElementById('verified').textContent = verified;
+        document.getElementById('unprocessed-count').textContent = unprocessed;
+        
+        const slider = document.getElementById('process-count-slider');
+        const input = document.getElementById('process-count-input');
+        slider.max = unprocessed;
+        input.max = unprocessed;
+        
+        const processBtn = document.getElementById('process-btn');
+        processBtn.disabled = unprocessed === 0;
+        if (unprocessed === 0) {
+            processBtn.textContent = '✓ All Processed';
+        } else {
+            processBtn.textContent = '🤖 Process with AI';
+        }
+    }
+
+    async function loadAvailableModels() {
+        try {
+            const response = await fetch('/api/models');
+            const models = await response.json();
+            
+            const select = document.getElementById('model-select');
+            select.innerHTML = '';
+            
+            if (models.length === 0) {
+                select.innerHTML = '<option value="">No models found</option>';
+                return;
+            }
+            
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.filename;
+                option.textContent = `${model.display_name} (${model.size_mb} MB)`;
+                if (model.is_default) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        } catch (err) {
+            console.error('Failed to load models:', err);
+            document.getElementById('model-select').innerHTML = '<option value="">Error loading models</option>';
+        }
+    }
+
+    async function loadInvoicePage(nodeId, page) {
+        try {
+            const img = document.createElement('img');
+            img.src = `/api/invoice_image/${nodeId}/${page}`;
+            img.alt = `Invoice page ${page + 1}`;
+            
+            document.getElementById('invoice-display').innerHTML = '';
+            document.getElementById('invoice-display').appendChild(img);
+            
+            currentPage = page;
+            updatePageNavigation();
+            
+        } catch (err) {
+            console.error('Error loading page:', err);
+        }
+    }
+
+    async function loadNextInvoice() {
+        try {
+            const response = await fetch('/api/next_invoice');
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    const aiProcessed = parseInt(document.getElementById('ai-processed').textContent);
+                    if (aiProcessed === 0) {
+                        document.getElementById('invoice-display').innerHTML = 
+                            '<div class="no-invoices">📋 No invoices to verify yet.<br><br>Process some invoices with AI first!</div>';
+                    } else {
+                        document.getElementById('invoice-display').innerHTML = 
+                            '<div class="no-invoices">🎉 No invoices to validate! All done.</div>';
+                    }
+                    document.getElementById('page-navigation').style.display = 'none';
+                    disableForm();
+                    return;
+                }
+                throw new Error('Failed to load invoice');
+            }
+            
+            currentInvoice = await response.json();
+            currentPage = 0;
+            
+            // Get page count
+            const pageCountResponse = await fetch(`/api/invoice_page_count/${currentInvoice.node_id}`);
+            const pageCountData = await pageCountResponse.json();
+            totalPages = pageCountData.page_count || 1;
+            
+            // Load first page
+            await loadInvoicePage(currentInvoice.node_id, 0);
+            
+            // Show page navigation if multi-page
+            const pageNav = document.getElementById('page-navigation');
+            if (totalPages > 1) {
+                pageNav.style.display = 'flex';
+                document.getElementById('total-pages').textContent = totalPages;
+            } else {
+                pageNav.style.display = 'none';
+            }
+            
+            // Populate form with AI extracted data
+            document.getElementById('node-id').value = currentInvoice.node_id;
+            document.getElementById('company-name').value = currentInvoice.ai_company_name || '';
+            document.getElementById('invoice-number').value = currentInvoice.ai_invoice_number || '';
+            document.getElementById('invoice-date').value = currentInvoice.ai_invoice_date || '';
+            document.getElementById('total-amount').value = currentInvoice.ai_total_amount || '';
+            document.getElementById('notes').value = '';
+            
+            // Show confidence
+            const confidence = currentInvoice.ai_confidence || 0;
+            const badge = document.getElementById('confidence-badge');
+            const pct = Math.round(confidence * 100);
+            badge.textContent = `${pct}% confidence`;
+            
+            if (confidence >= 0.8) {
+                badge.className = 'confidence-badge confidence-high';
+            } else if (confidence >= 0.5) {
+                badge.className = 'confidence-badge confidence-medium';
+            } else {
+                badge.className = 'confidence-badge confidence-low';
+            }
+            
+            enableForm();
+            
+        } catch (err) {
+            console.error('Error loading invoice:', err);
+            document.getElementById('invoice-display').innerHTML = 
+                `<div class="no-invoices">❌ Error loading invoice: ${err.message}</div>`;
+        }
+    }
+
+    function previousPage() {
+        if (currentPage > 0 && currentInvoice) {
+            loadInvoicePage(currentInvoice.node_id, currentPage - 1);
+        }
+    }
+
+    function nextPage() {
+        if (currentPage < totalPages - 1 && currentInvoice) {
+            loadInvoicePage(currentInvoice.node_id, currentPage + 1);
+        }
+    }
+
+    function updatePageNavigation() {
+        document.getElementById('current-page').textContent = currentPage + 1;
+        document.getElementById('prev-page-btn').disabled = currentPage === 0;
+        document.getElementById('next-page-btn').disabled = currentPage >= totalPages - 1;
+    }
+
+    async function saveAndNext() {
+        if (!currentInvoice) return;
+        
+        const data = {
+            node_id: document.getElementById('node-id').value,
+            company_name: document.getElementById('company-name').value,
+            invoice_number: document.getElementById('invoice-number').value,
+            invoice_date: document.getElementById('invoice-date').value,
+            total_amount: parseFloat(document.getElementById('total-amount').value) || 0,
+            notes: document.getElementById('notes').value,
+            flagged: false
+        };
+        
+        try {
+            document.getElementById('save-next-btn').disabled = true;
+            document.getElementById('save-next-btn').textContent = '💾 Saving...';
+            
+            const response = await fetch('/api/save_validation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) throw new Error('Save failed');
+            
+            document.getElementById('save-next-btn').textContent = '✅ Saved!';
+            
+            // Update stats
+            await fetchStats();
+            
+            // Small delay to show success message, then load next invoice
+            setTimeout(() => {
+                document.getElementById('save-next-btn').textContent = '💾 Save & Next ➡️';
+                document.getElementById('save-next-btn').disabled = false;
+                loadNextInvoice();
+            }, 800);
+            
+        } catch (err) {
+            console.error('Save error:', err);
+            alert('Failed to save: ' + err.message);
+            document.getElementById('save-next-btn').disabled = false;
+            document.getElementById('save-next-btn').textContent = '💾 Save & Next ➡️';
+        }
+    }
+
+    async function saveValidation() {
+        if (!currentInvoice) return;
+        
+        const data = {
+            node_id: document.getElementById('node-id').value,
+            company_name: document.getElementById('company-name').value,
+            invoice_number: document.getElementById('invoice-number').value,
+            invoice_date: document.getElementById('invoice-date').value,
+            total_amount: parseFloat(document.getElementById('total-amount').value) || 0,
+            notes: document.getElementById('notes').value,
+            flagged: false
+        };
+        
+        try {
+            document.getElementById('save-btn').disabled = true;
+            document.getElementById('save-btn').textContent = '💾 Saving...';
+            
+            const response = await fetch('/api/save_validation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) throw new Error('Save failed');
+            
+            document.getElementById('save-btn').textContent = '✅ Saved!';
+            setTimeout(() => {
+                document.getElementById('save-btn').textContent = '💾 Save';
+                document.getElementById('save-btn').disabled = false;
+            }, 1500);
+            
+            fetchStats();
+            
+        } catch (err) {
+            console.error('Save error:', err);
+            alert('Failed to save: ' + err.message);
+            document.getElementById('save-btn').disabled = false;
+            document.getElementById('save-btn').textContent = '💾 Save';
+        }
+    }
+
+    function disableForm() {
+        document.getElementById('save-next-btn').disabled = true;
+        document.querySelectorAll('#validation-form input, #validation-form textarea').forEach(el => {
+            el.disabled = true;
+        });
+    }
+
+    function enableForm() {
+        document.getElementById('save-next-btn').disabled = false;
+        document.querySelectorAll('#validation-form input, #validation-form textarea').forEach(el => {
+            el.disabled = false;
+        });
+    }
+
+    function openProcessDialog() {
+        const unprocessed = parseInt(document.getElementById('unprocessed-count').textContent);
+        if (unprocessed === 0) return;
+        
+        const modal = document.getElementById('process-modal');
+        const slider = document.getElementById('process-count-slider');
+        const input = document.getElementById('process-count-input');
+        
+        const initialValue = Math.min(10, unprocessed);
+        slider.value = initialValue;
+        input.value = initialValue;
+        updateProcessCount(initialValue);
+        
+        modal.classList.add('active');
+    }
+
+    function closeProcessDialog() {
+        document.getElementById('process-modal').classList.remove('active');
+    }
+
+    function updateProcessCount(value) {
+        const unprocessed = parseInt(document.getElementById('unprocessed-count').textContent);
+        const count = Math.min(parseInt(value), unprocessed);
+        
+        document.getElementById('process-count-display').textContent = count;
+        document.getElementById('process-count-slider').value = count;
+        document.getElementById('process-count-input').value = count;
+    }
+
+    function setProcessCount(value) {
+        const unprocessed = parseInt(document.getElementById('unprocessed-count').textContent);
+        const count = value === 'all' ? unprocessed : Math.min(value, unprocessed);
+        updateProcessCount(count);
+    }
+
+    async function startProcessing() {
+        const count = parseInt(document.getElementById('process-count-input').value);
+        const model = document.getElementById('model-select').value;
+        closeProcessDialog();
+        
+        const output = document.getElementById('sync-output');
+        if (!output.classList.contains('expanded')) {
+            toggleConsole();
+        }
+        
+        output.textContent = `🤖 Starting AI processing for ${count} invoices...\n`;
+        
+        try {
+            const response = await fetch('/process_with_ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ count: count, model: model })
+            });
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split("\n\n");
+                
+                for (const line of lines) {
+                    if (line.startsWith("data: ")) {
+                        const msg = line.replace("data: ", "").trim();
+                        if (msg === "[DONE]") {
+                            output.textContent += "\n✅ AI processing complete!\n";
+                            fetchStats();
+                            loadNextInvoice();
+                            return;
+                        }
+                        output.textContent += msg + "\n";
+                        output.scrollTop = output.scrollHeight;
+                    }
+                }
+            }
+        } catch (err) {
+            output.textContent += `\n❌ Error: ${err}\n`;
+        }
+    }
+
+    async function startSync() {
+        const output = document.getElementById('sync-output');
+        
+        if (!output.classList.contains('expanded')) {
+            toggleConsole();
+        }
+        
+        output.textContent = 'Starting sync...\n';
+
+        const response = await fetch('/sync_to_sharepoint');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            const lines = chunk.split("\n\n");
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    const msg = line.replace("data: ", "").trim();
+                    if (msg === "[DONE]") {
+                        output.textContent += "\n✅ Sync complete!\n";
+                        fetchStats();
+                        return;
+                    }
+                    output.textContent += msg + "\n";
+                    output.scrollTop = output.scrollHeight;
+                }
+            }
+        }
+    }
+
+    // Initialize on page load
+    fetchStats();
+    loadAvailableModels();
+    loadNextInvoice();
+    </script>
+</body>
+</html>
