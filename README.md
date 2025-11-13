@@ -2,11 +2,19 @@
 
 ## Prerequisites
 
-Install required Python packages:
+Create and activate a virtual environment:
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+Install required Python packages into the virtual environment:
 
 ```bash
 pip install -r requirements.txt
 ```
+
+
 
 Download Mistral7b and place it in the "models" folder: https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf
 
