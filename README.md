@@ -32,11 +32,4 @@ Enter your credentials (same for GCDocs and SharePoint).
 4. **Human Validation**: User reviews/corrects, updates SharePoint `Human_*` fields
 5. **Export**: Generate CSV from SharePoint data
 
-### Benefits:
-
-✅ **Concurrent Users**: Multiple people can validate simultaneously
-✅ **Real-time Tracking**: SharePoint shows live status
-✅ **No Training Needed**: Client already knows SharePoint
-✅ **Audit Trail**: SharePoint tracks all changes
-✅ **Filtering/Views**: Use SharePoint views to filter by status
-✅ **Mobile Access**: Works on tablets/phones via SharePoint app
+AI Extraction data and Human Validation data is automatically pushed to the SharePoint list to allow evaluating and further training the AI model.
