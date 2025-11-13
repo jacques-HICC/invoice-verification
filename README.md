@@ -2,6 +2,14 @@
 
 ## Prerequisites
 
+Download Mistral7b and place it in the "models" folder: https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+
+Access to example GCDocs folder: https://gcdocs.gc.ca/infc/llisapi.dll/app/nodes/32495273
+
+Access to example SharePoint list: https://142gc.sharepoint.com/sites/DataScience/Lists/invoiceverificationtestlist/AllItems.aspx?env=WebViewList
+
+## Running the application
+
 Create and activate a virtual environment:
 ```bash
 python -m venv venv
@@ -13,16 +21,6 @@ Install required Python packages into the virtual environment:
 ```bash
 pip install -r requirements.txt
 ```
-
-
-
-Download Mistral7b and place it in the "models" folder: https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf
-
-Access to example GCDocs folder: https://gcdocs.gc.ca/infc/llisapi.dll/app/nodes/32495273
-
-Access to example SharePoint list: https://142gc.sharepoint.com/sites/DataScience/Lists/invoiceverificationtestlist/AllItems.aspx?env=WebViewList
-
-## Running the application
 
 ```bash
 python app/app.py
