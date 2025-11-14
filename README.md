@@ -90,7 +90,7 @@ The `config.py` file allows you to modify key variables for AI extraction, Share
     python app.py
     ```
 
-Enter your credentials when prompted (for both GCDocs and SharePoint).
+    Enter your credentials when prompted (for both GCDocs and SharePoint).
 
 ---
 
