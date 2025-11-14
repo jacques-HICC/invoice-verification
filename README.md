@@ -65,7 +65,7 @@ class AIConfig:
 
         [Prompt continues...]
     """
-
+```bash
 # SharePoint integration
 class SharePointConfig:
     SP_SITE_NAME = "DataScience"                     # SharePoint site name
@@ -94,7 +94,7 @@ class OCRConfig:
 class GCDocsConfig:
     INVOICES_FOLDER_NODE = 32495273  # Node ID of the invoices folder in GCDocs
 
-
+```
 ---
 
 ## Running the application
