@@ -90,7 +90,7 @@ The `config.py` file allows you to modify key variables for AI extraction, Share
     python app.py
     ```
 
-    Enter your credentials when prompted (for both GCDocs and SharePoint).
+    Enter your credentials when prompted (for both GCDocs and SharePoint) and wait for the app to launch.
 
 ---
 
@@ -101,8 +101,7 @@ The `config.py` file allows you to modify key variables for AI extraction, Share
 1. **Startup**: App connects to GCDocs and SharePoint.  
 2. **Process Invoices**: Downloads unprocessed PDFs from GCDocs.  
 3. **AI Extraction**: Extracts invoice data, updates SharePoint `AI_*` fields.  
-4. **Human Validation**: User reviews/corrects, updates SharePoint `Human_*` fields.  
-5. **Export**: Generate CSV from SharePoint data.  
+4. **Human Validation**: User reviews/corrects, updates SharePoint `Human_*` fields.
 
 ### Notes
 
