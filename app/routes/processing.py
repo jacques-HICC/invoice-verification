@@ -18,7 +18,7 @@ def process_with_ai():
         try:
             # Initialize LLM
             yield "data: 🤖 Loading AI model...\n\n"
-            from processing.extraction import LLMExtractor
+            from app.processing.extraction import LLMExtractor
             extractor = LLMExtractor(model_filename)
             yield f"data: ✓ Model loaded: {model_filename}\n\n"
             
@@ -63,7 +63,7 @@ def process_with_ai():
                     # OCR
                     ocr_start = time.time()
                     yield f"data:     👁️ Performing OCR...\n\n"
-                    from processing.ocr import perform_ocr
+                    from app.processing.ocr import perform_ocr
                     ocr_text = perform_ocr(pdf_path)
                     ocr_time = time.time() - ocr_start
                     yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {len(ocr_text)} chars)\n\n"

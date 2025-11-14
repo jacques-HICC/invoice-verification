@@ -92,6 +92,13 @@ class LLMExtractor:
             print(f"🔍 REPAIRED JSON: {repaired}")
             
             data = json.loads(repaired)
+            
+            # Ensure total_amount is a float
+            try:
+                data['total_amount'] = float(data.get('total_amount', 0))
+            except (ValueError, TypeError):
+                data['total_amount'] = 0.0
+            
             data['confidence'] = 0.85
             data['model_used'] = self.model_name
             
@@ -102,7 +109,7 @@ class LLMExtractor:
                 "invoice_number": "",
                 "company_name": "",
                 "invoice_date": "",
-                "total_amount": 0,
+                "total_amount": 0.0,  # Changed to 0.0 for consistency
                 "confidence": 0.0,
                 "model_used": self.model_name,
                 "error": f"Failed to parse: {str(e)}"

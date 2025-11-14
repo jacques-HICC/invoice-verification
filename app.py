@@ -7,18 +7,22 @@ import fitz  # PyMuPDF
 from PIL import Image
 import io
 
-from services.gcdocs import Session as GCDocsSession, GCDocs
-from services.sharepoint import SharePointTracker
-from services.invoice_repo import InvoiceRepository
+from app.services.gcdocs import Session as GCDocsSession, GCDocs
+from app.services.sharepoint import SharePointTracker
+from app.services.invoice_repo import InvoiceRepository
 
 # Create Flask app first
-app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this-in-production'  # Add this!
+app = Flask(
+    __name__,
+    template_folder='app/templates',
+    static_folder='app/static'
+)
+app.secret_key = 'very-secret-key-dont-tell-anyone'
 
 # Now import and register blueprints
-from routes.api import api_bp
-from routes.api import validation_bp
-from routes.processing import processing_bp
+from app.routes.api import api_bp
+from app.routes.api import validation_bp
+from app.routes.processing import processing_bp
 
 app.register_blueprint(validation_bp, url_prefix='/api')
 app.register_blueprint(api_bp)

@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, send_file, current_app
 import os
 from pathlib import Path
-from utils.pdf_utils import pdf_to_images
+from app.utils.pdf_utils import pdf_to_images
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 validation_bp = Blueprint('validation', __name__)
