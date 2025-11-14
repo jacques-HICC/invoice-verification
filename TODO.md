@@ -1,21 +1,21 @@
 ## TODO.md
-	• ~~Next prev buttons nowhere to be found for specific invoice pages~~
-	• ~~Toronto waterfront often coming out as "company name" even though this is the name of the project -> adjust prompt~~
-	• ~~Grab credentials from UI on app start instead of in console~~
-	• Package everything so it's downloadable and runnable from devops or github ie setup.bat, start_app.bat
-	• Add "Processed with" field to sharepoint tracker that could show which model was used - would support model testing
-	• ~~Resizable mock-console~~
-	• ~~Zoom/pan invoice preview~~
-	• ~~Delete stuff from /temp on app startup~~
-	• Delete jpg files from /temp on save&next
-	• Make gcdocs folder changeable in the UI
-	• Make n_ctx a variable in the interface as well (maybe low ram, medium and high settings)
-	• Skip button for previewer to skip an invoice
-	• ~~Gcdocs link button for previewer~~
-	• Keyboard shortcuts for validation workflow
-	• Overlay preview section for loading
-	• Some function for "not an invoice" in previewer.. Maybe tie this to additional SharePoint field so we ignore it in training and subsequent runs
-	• Make mock console logs cooler looking
-	• Make mock console scrollable
-	• Make button to go to sharepoint list
-	• Back button to edit sharepoint list
+- ~~Next prev buttons nowhere to be found for specific invoice pages~~
+- ~~Toronto waterfront often coming out as "company name" even though this is the name of the project -> adjust prompt~~
+- ~~Grab credentials from UI on app start instead of in console~~
+- Package everything so it's downloadable and runnable from devops or github ie setup.bat, start_app.bat
+- Add "Processed with" field to sharepoint tracker that could show which model was used - would support model testing
+- ~~Resizable mock-console~~
+- ~~Zoom/pan invoice preview~~
+- ~~Delete stuff from /temp on app startup~~
+- Delete jpg files from /temp on save&next
+- Make gcdocs folder changeable in the UI
+- Make n_ctx a variable in the interface as well (maybe low ram, medium and high settings)
+- Skip button for previewer to skip an invoice
+- ~~Gcdocs link button for previewer~~
+- Keyboard shortcuts for validation workflow
+- Overlay preview section for loading
+- Some function for "not an invoice" in previewer.. Maybe tie this to additional SharePoint field so we ignore it in training and subsequent runs
+- Make mock console logs cooler looking
+- Make mock console scrollable
+- Make button to go to sharepoint list
+- Back button to edit sharepoint list
