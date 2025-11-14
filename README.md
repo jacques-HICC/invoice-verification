@@ -73,16 +73,22 @@ The `config.py` file allows you to modify key variables for AI extraction, Share
 
 1. **Create and activate a virtual environment**:
 
+    ```bash
     python -m venv venv
     venv\Scripts\activate
+    ```
 
 2. **Install required Python packages**:
 
+    ```bash
     pip install -r requirements.txt
+    ```
 
 3. **Start the application**:
 
+    ```bash
     python app.py
+    ```
 
 Enter your credentials when prompted (for both GCDocs and SharePoint).
 
