@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify, send_file, send_from
 import os
 import csv
 from datetime import datetime
+import webbrowser
+import shutil
 
 import fitz  # PyMuPDF
 from PIL import Image
@@ -10,6 +12,8 @@ import io
 from app.services.gcdocs import Session as GCDocsSession, GCDocs
 from app.services.sharepoint import SharePointTracker
 from app.services.invoice_repo import InvoiceRepository
+
+from config import SharePointConfig, GCDocsConfig
 
 # Create Flask app first
 app = Flask(
@@ -240,7 +244,7 @@ def stream_sync():
 
         for msg in gcdocs.sync_gcdocs_nodes_to_sharepoint_minimal(
             sp_tracker=sp_tracker,
-            folder_id=32495273,
+            folder_id=GCDocsConfig.INVOICES_FOLDER_NODE,
             stream=True
         ):
             yield f"data: {msg}\n\n"
@@ -273,24 +277,45 @@ def start_app():
     global sp_tracker_global
 
     print("Starting Invoice AI...")
-    
-    # Setup SharePoint (browser auth - happens once at startup)
-    SP_SITE_NAME = "DataScience"
-    SP_LIST_NAME = "invoiceverificationtestlist"
-    TENANT_NAME = "142gc.sharepoint.com"
+
+    # --- Clear temp folder ---
+    temp_dir = os.path.join(os.path.dirname(__file__), 'temp')
+    if os.path.exists(temp_dir):
+        print(f"Clearing temp folder: {temp_dir}")
+        for filename in os.listdir(temp_dir):
+            file_path = os.path.join(temp_dir, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or link
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)  # remove folder
+            except Exception as e:
+                print(f"Failed to delete {file_path}: {e}")
+    else:
+        os.makedirs(temp_dir)
+        print(f"Created temp folder: {temp_dir}")
+
+    # --- Setup SharePoint ---
+    sp_site_name = SharePointConfig.SP_SITE_NAME
+    sp_list_name = SharePointConfig.SP_LIST_NAME
+    tenant_name = SharePointConfig.TENANT_NAME
 
     print("Connecting to SharePoint...")
-    sp_tracker_global = SharePointTracker(SP_SITE_NAME, SP_LIST_NAME, TENANT_NAME)
-    sp_tracker_global.login()  # This does browser auth
+    sp_tracker_global = SharePointTracker(sp_site_name, sp_list_name, tenant_name)
+    sp_tracker_global.login()  # browser auth
     all_items = sp_tracker_global.get_all_items()
     print(f"✓ Connected to SharePoint - Total items in list: {len(all_items)}")
-    
+
     # Store in app.config so routes can access it
     app.config['SHAREPOINT_TRACKER'] = sp_tracker_global
-    
-    print("Starting web server...")
-    print("📱 Navigate to http://localhost:5000 to login to GCDocs")
-    
+
+    url = "http://localhost:5000"
+    print(f"Starting web server...\n📱 Opening {url} in your default browser...")
+
+    # Open the browser
+    webbrowser.open(url, new=2)  # new=2 -> open in a new tab, if possible
+
+    # Start Flask server
     app.run(debug=True, use_reloader=False, port=5000)
 
 if __name__ == "__main__":

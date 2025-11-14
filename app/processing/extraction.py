@@ -5,20 +5,29 @@ from pathlib import Path
 import os
 from json_repair import repair_json
 
+from config import AIConfig
+
 class LLMExtractor:
-    def __init__(self, model_filename: str):
+    def __init__(self, model_filename: str = None):
+        # Use config values
+        n_ctx = AIConfig.CTX_SIZE
+        model_filename = model_filename or AIConfig.MODEL_PATH
+
         # Absolute path to app/models
-        app_root = Path(__file__).resolve().parent.parent  # from processing/ up to app/
+        app_root = Path(__file__).resolve().parent.parent
         models_dir = app_root / 'models'
         model_path = models_dir / model_filename
 
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found at: {model_path}")
 
+        self.n_ctx = n_ctx
+        self.model_name = model_filename
+
         print(f"Loading model from: {model_path}")
         self.llm = Llama(
             model_path=str(model_path),
-            n_ctx=8192,
+            n_ctx=n_ctx,
             n_threads=4,
             n_gpu_layers=0,
             verbose=False
@@ -28,50 +37,18 @@ class LLMExtractor:
     def extract_invoice_data(self, ocr_text: str) -> dict:
         """Extract structured data from invoice OCR text"""
 
-        prompt = f"""
-        You are an information extraction model. Extract invoice fields from OCR text and return a STRICT JSON object with EXACTLY these keys:
+        header_slice = ocr_text[:1200]
+        footer_slice = ocr_text[-800:]
 
-        - "invoice_number" (string)
-        - "company_name" (string)
-        - "invoice_date" (string, format YYYY-MM-DD)
-        - "total_amount" (number, no currency symbols or commas)
-
-        RULES (short and strict):
-        1) company_name = the supplier/vendor/emitter of the invoice (the company issuing the invoice), not the client/project/funder/delivery address.
-        • Prefer header/logo text; labels "Supplier", "Vendor", "From", "Remit To"; names near tax IDs (GST/HST/VAT) or supplier address.
-        • Ignore entities labeled "Bill To", "Ship To", "Client", "Owner", "Project", "Funding Recipient", "Attention".
-        • HARD NEGATIVES (never return as company_name): "Toronto Waterfront Revitalization Corporation", "Toronto Waterfront Revitalization", "Waterfront Toronto", "TWRC".
-
-        2) invoice_number: pick the value nearest labels "Invoice", "Invoice No", "Invoice #", "Inv.", "Facture", "No. de facture". Alphanumeric (e.g., INV-2025-1234) is allowed.
-
-        3) invoice_date: prefer labels "Invoice Date", "Date of Issue", "Date", "Date de facture". Normalize to YYYY-MM-DD from formats like DD Mon YYYY, MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD. If multiple candidates conflict, choose the one closest to the invoice date label.
-
-        4) total_amount: prefer "Total", "Amount Due", "Balance Due" / "Total", "Montant dû", "Solde dû". Remove currency symbols and thousand separators; parse parentheses as negative; output a JSON number. Ignore "Subtotal", "Tax", "Paid to date".
-
-        OUTPUT:
-        • Return ONLY the JSON object with exactly the four keys. No explanations, no code fences, no trailing text.
-
-        Example output format:
-        {{
-        "invoice_number": "INV-2025-1234",
-        "company_name": "ACME Corporation",
-        "invoice_date": "2025-11-13",
-        "total_amount": 1234.56
-        }}
-
-        Invoice OCR text (header + footer slice):
-        {ocr_text[:1200]}
-
-        ...
-        {ocr_text[-800:]}
-
-        Return ONLY the JSON object.
-        """
+        prompt = AIConfig.INVOICE_EXTRACTION_PROMPT.format(
+            header_text=header_slice,
+            footer_text=footer_slice
+        )
                     
         response = self.llm(
             prompt,
-            max_tokens=512,
-            temperature=0.1,
+            max_tokens=AIConfig.MAX_TOKENS,
+            temperature=AIConfig.TEMPERATURE,
             stop=["###", "\n\n\n"],
             echo=False
         )
@@ -92,10 +69,12 @@ class LLMExtractor:
             print(f"🔍 REPAIRED JSON: {repaired}")
             
             data = json.loads(repaired)
-            
-            # Ensure total_amount is a float
+
+            # Clean numeric fields
             try:
-                data['total_amount'] = float(data.get('total_amount', 0))
+                raw_amount = str(data.get('total_amount', 0))
+                clean_amount = raw_amount.replace(",", "")
+                data['total_amount'] = float(clean_amount)
             except (ValueError, TypeError):
                 data['total_amount'] = 0.0
             

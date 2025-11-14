@@ -33,6 +33,37 @@ def get_available_models():
     print(f"Returning {len(models)} models")
     return jsonify(models)
 
+@validation_bp.route('/download_pdf/<node_id>', methods=['GET'])
+def download_pdf(node_id):
+    """Download PDF from GCDocs and serve it"""
+    gcdocs = current_app.config['GCDOCS']
+    
+    try:
+        # Create temp directory
+        temp_dir = os.path.join(os.getcwd(), "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Download PDF
+        pdf_path = os.path.join(temp_dir, f"invoice_{node_id}.pdf")
+        
+        # Only download if not already cached
+        if not os.path.exists(pdf_path):
+            gcdocs.download_file(node_id=int(node_id), save_path=pdf_path)
+            
+            if not os.path.exists(pdf_path):
+                return jsonify({'error': 'PDF download failed'}), 500
+        
+        # Serve the PDF with inline display (opens in browser tab)
+        return send_file(
+            pdf_path, 
+            mimetype='application/pdf',
+            as_attachment=False,  # Display inline, not download
+            download_name=f'invoice_{node_id}.pdf'
+        )
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @validation_bp.route('/next_invoice', methods=['GET'])
 def get_next_invoice():
     """Get next unvalidated invoice that has been AI processed"""
@@ -109,26 +140,30 @@ def get_invoice_image(node_id, page=0):
 @validation_bp.route('/invoice_page_count/<node_id>', methods=['GET'])
 def get_invoice_page_count(node_id):
     """Get the total number of pages for an invoice"""
+    gcdocs = current_app.config['GCDOCS']
+    
     try:
         temp_dir = os.path.join(os.getcwd(), "temp")
+        os.makedirs(temp_dir, exist_ok=True)
         
-        # Look for already converted images
-        pattern = f"invoice_{node_id}_page_*.jpg"
-        existing_images = list(Path(temp_dir).glob(pattern))
-        
-        if existing_images:
-            return jsonify({'page_count': len(existing_images)})
-        
-        # If no images cached, check the PDF
+        # Download PDF if not cached
         pdf_path = os.path.join(temp_dir, f"invoice_{node_id}.pdf")
-        if os.path.exists(pdf_path):
-            from pdf2image import pdfinfo_from_path
-            info = pdfinfo_from_path(pdf_path)
-            return jsonify({'page_count': info['Pages']})
+        if not os.path.exists(pdf_path):
+            gcdocs.download_file(node_id=int(node_id), save_path=pdf_path)
+            
+            if not os.path.exists(pdf_path):
+                return jsonify({'page_count': 1}), 500
         
-        return jsonify({'page_count': 1})  # Default to 1 page
+        # Get page count from PDF using PyMuPDF
+        import fitz
+        doc = fitz.open(pdf_path)
+        page_count = len(doc)
+        doc.close()
+        
+        return jsonify({'page_count': page_count})
         
     except Exception as e:
+        print(f"Error getting page count: {e}")
         return jsonify({'error': str(e), 'page_count': 1}), 500
 
 

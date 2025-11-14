@@ -597,22 +597,24 @@
 
         <section class="validation-section">
             <div class="invoice-preview">
-                <div class="preview-header">
-                    <div class="page-navigation" id="page-navigation" style="display: none;">
-                        <button id="prev-page-btn" onclick="previousPage()">◀ Previous</button>
-                        <span class="page-info">
-                            Page <span id="current-page">1</span> of <span id="total-pages">1</span>
-                        </span>
-                        <button id="next-page-btn" onclick="nextPage()">Next ▶</button>
-                    </div>
-                    <h2>Invoice Preview</h2>
-                    <div class="preview-actions">
-                        <button class="refresh-btn" onclick="refreshInvoice()" id="refresh-btn">
-                            🔄 Refresh
-                        </button>
-                    </div>
+            <div class="preview-header">
+                <div class="page-navigation" id="page-navigation" style="display: none;">
+                    <button id="prev-page-btn" onclick="previousPage()">◀ Previous</button>
+                    <span class="page-info">
+                        Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+                    </span>
+                    <button id="next-page-btn" onclick="nextPage()">Next ▶</button>
                 </div>
-
+                <h2>Invoice Preview</h2>
+                <div class="preview-actions">
+                    <button class="refresh-btn" onclick="openInGCDocs()" id="gcdocs-btn" style="display: none;">
+                        🔗 Display Full Invoice
+                    </button>
+                    <button class="refresh-btn" onclick="refreshInvoice()" id="refresh-btn">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
                 <div class="zoom-controls">
                     <button onclick="zoomIn()" title="Zoom In">+</button>
                     <div class="zoom-level" id="zoom-level">100%</div>
@@ -1007,6 +1009,7 @@
                             '<div class="no-invoices">🎉 No invoices to validate! All done.</div>';
                     }
                     document.getElementById('page-navigation').style.display = 'none';
+                    document.getElementById('gcdocs-btn').style.display = 'none';
                     disableForm();
                     return;
                 }
@@ -1016,24 +1019,24 @@
             currentInvoice = await response.json();
             currentPage = 0;
             
+            // Show GCDocs button
+            document.getElementById('gcdocs-btn').style.display = 'flex';
+            
             // Get page count
             const pageCountResponse = await fetch(`/api/invoice_page_count/${currentInvoice.node_id}`);
             const pageCountData = await pageCountResponse.json();
             totalPages = pageCountData.page_count || 1;
             
-            // Load first page
+            // ALWAYS show page navigation and update total pages
+            const pageNav = document.getElementById('page-navigation');
+            pageNav.style.display = 'flex';  // Show it first
+            document.getElementById('total-pages').textContent = totalPages;
+            document.getElementById('current-page').textContent = '1';
+            
+            // Load first page (this will call updatePageNavigation)
             await loadInvoicePage(currentInvoice.node_id, 0);
             
-            // Show page navigation if multi-page
-            const pageNav = document.getElementById('page-navigation');
-            if (totalPages > 1) {
-                pageNav.style.display = 'flex';
-                document.getElementById('total-pages').textContent = totalPages;
-            } else {
-                pageNav.style.display = 'none';
-            }
-            
-            // Populate form with AI extracted data
+            // Rest of the code for populating form...
             document.getElementById('node-id').value = currentInvoice.node_id;
             document.getElementById('company-name').value = currentInvoice.ai_company_name || '';
             document.getElementById('invoice-number').value = currentInvoice.ai_invoice_number || '';
@@ -1309,7 +1312,12 @@
             }
         }
     }
-
+    function openInGCDocs() {
+        if (currentInvoice && currentInvoice.node_id) {
+            // Opens PDF in new tab using our Flask route
+            window.open(`/api/download_pdf/${currentInvoice.node_id}`, '_blank');
+        }
+    }
     // Initialize on page load
     setupConsoleResize();
     setupPanZoom();
