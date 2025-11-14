@@ -128,7 +128,4 @@ Enter your credentials when prompted (for both GCDocs and SharePoint).
       |
       v
 [ SharePoint Human_* fields ]
-      |
-      v
-[ CSV Export ]
 ```
