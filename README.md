@@ -23,7 +23,7 @@ pip install -r requirements.txt
 ```
 
 ```bash
-python app/app.py
+python app.py
 ```
 
 Enter your credentials (same for GCDocs and SharePoint).
