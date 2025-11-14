@@ -1,25 +1,24 @@
-from flask import Flask, render_template, request, jsonify, send_file, send_from_directory, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, send_file, send_from_directory, Response, stream_with_context, redirect, url_for, flash, session
 import os
 import csv
 from datetime import datetime
 
 import fitz  # PyMuPDF
 from PIL import Image
-#import pytesseract
 import io
 
-from services.gcdocs import Session, GCDocs
+from services.gcdocs import Session as GCDocsSession, GCDocs
 from services.sharepoint import SharePointTracker
 from services.invoice_repo import InvoiceRepository
 
 # Create Flask app first
 app = Flask(__name__)
+app.secret_key = 'your-secret-key-change-this-in-production'  # Add this!
 
 # Now import and register blueprints
 from routes.api import api_bp
 from routes.api import validation_bp
 from routes.processing import processing_bp
-
 
 app.register_blueprint(validation_bp, url_prefix='/api')
 app.register_blueprint(api_bp)
@@ -41,7 +40,56 @@ sp_tracker_global = None
 
 @app.route('/')
 def index():
+    print(f"Session contents: {session}")
+    print(f"Is authenticated: {'gcdocs_authenticated' in session}")
+    
+    # Check if user is logged in AND if GCDOCS is actually configured
+    if 'gcdocs_authenticated' not in session or not app.config.get('GCDOCS'):
+        print("Redirecting to login...")
+        session.clear()  # Clear stale session
+        return redirect(url_for('login'))
+    
+    print("Rendering index.html")
     return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        try:
+            global gcdocs_global, session_global
+            
+            # Create session and login
+            session_global = GCDocsSession()
+            session_global.login(username, password)
+            
+            # Create GCDocs instance
+            gcdocs_global = GCDocs(session_global)
+            
+            # Store in app.config so routes can access it
+            app.config['GCDOCS'] = gcdocs_global
+            
+            # Mark as authenticated
+            session['gcdocs_authenticated'] = True
+            flash('Successfully logged in to GCDocs!', 'success')
+            return redirect(url_for('index'))
+            
+        except Exception as e:
+            flash(f'Login failed: {str(e)}', 'error')
+            return render_template('login.html')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('gcdocs_authenticated', None)
+    global gcdocs_global, session_global
+    gcdocs_global = None
+    session_global = None
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/get_invoice/<int:invoice_id>')
 def get_invoice(invoice_id):
@@ -164,11 +212,30 @@ def get_status():
 @app.route("/sync_to_sharepoint", methods=["GET"])
 def stream_sync():
     def generate():
-        global sp_tracker_global
-        yield f"data: ✓ Using existing SharePoint connection: {sp_tracker_global.list_name}\n\n"
+        # Check if user is logged in
+        if 'gcdocs_authenticated' not in session:
+            yield "data: ❌ Error: Please login to GCDocs first\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        
+        # Get services from app.config
+        gcdocs = app.config.get('GCDOCS')
+        sp_tracker = app.config.get('SHAREPOINT_TRACKER')
+        
+        if not gcdocs:
+            yield "data: ❌ Error: GCDocs not connected. Please login.\n\n"
+            yield "data: [DONE]\n\n"
+            return
+            
+        if not sp_tracker:
+            yield "data: ❌ Error: SharePoint not connected\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        
+        yield f"data: ✓ Using existing SharePoint connection: {sp_tracker.list_name}\n\n"
 
-        for msg in gcdocs_global.sync_gcdocs_nodes_to_sharepoint_minimal(
-            sp_tracker=sp_tracker_global,
+        for msg in gcdocs.sync_gcdocs_nodes_to_sharepoint_minimal(
+            sp_tracker=sp_tracker,
             folder_id=32495273,
             stream=True
         ):
@@ -182,8 +249,11 @@ def stream_sync():
 @app.route('/sharepoint_stats')
 def sharepoint_stats():
     try:
-        global sp_tracker_global
-        items = sp_tracker_global.get_all_items()
+        sp_tracker = app.config.get('SHAREPOINT_TRACKER')
+        if not sp_tracker:
+            return jsonify({"error": "SharePoint not connected"}), 500
+            
+        items = sp_tracker.get_all_items()
         total = len(items)
         ai_processed = sum(1 for i in items if i.get("AI_Processed"))
         human_validated = sum(1 for i in items if i.get("Human_Validated"))
@@ -196,33 +266,27 @@ def sharepoint_stats():
         return jsonify({"error": str(e)}), 500
 
 def start_app():
-    global session_global, gcdocs_global, repo_global, sp_tracker_global
+    global sp_tracker_global
 
     print("Starting Invoice AI...")
-    print("Connecting to GCDocs...")
-
-    session_global = Session()
-    session_global.login()
-
-    gcdocs_global = GCDocs(session_global)
-
+    
+    # Setup SharePoint (browser auth - happens once at startup)
     SP_SITE_NAME = "DataScience"
     SP_LIST_NAME = "invoiceverificationtestlist"
     TENANT_NAME = "142gc.sharepoint.com"
 
+    print("Connecting to SharePoint...")
     sp_tracker_global = SharePointTracker(SP_SITE_NAME, SP_LIST_NAME, TENANT_NAME)
-    sp_tracker_global.login()
+    sp_tracker_global.login()  # This does browser auth
     all_items = sp_tracker_global.get_all_items()
-    print(f"Total items in list: {len(all_items)}")
-
-    # Store in Flask app config for access in routes
-    app.config['GCDOCS'] = gcdocs_global
+    print(f"✓ Connected to SharePoint - Total items in list: {len(all_items)}")
+    
+    # Store in app.config so routes can access it
     app.config['SHAREPOINT_TRACKER'] = sp_tracker_global
-    app.config['INVOICE_REPO'] = repo_global
-
-    print("✓ Connected to GCDocs")
+    
     print("Starting web server...")
-
+    print("📱 Navigate to http://localhost:5000 to login to GCDocs")
+    
     app.run(debug=True, use_reloader=False, port=5000)
 
 if __name__ == "__main__":

@@ -5,11 +5,15 @@ class Session:
     def __init__(self, base_url="https://gcdocs.gc.ca/infc/llisapi.dll/api/v1"):
         self.base_url = base_url
         self.ticket = None
-        self.requests_session = requests.Session()  # persist cookies
+        self.requests_session = requests.Session()
 
-    def login(self):
-        username = input("Username: ")
-        password = getpass.getpass("Password: ")
+    def login(self, username=None, password=None):
+        # If no credentials provided, fall back to console input
+        if username is None:
+            username = input("Username: ")
+        if password is None:
+            password = getpass.getpass("Password: ")
+            
         response = self.requests_session.post(f"{self.base_url}/auth", data={
             "username": username,
             "password": password

@@ -18,7 +18,7 @@ class LLMExtractor:
         print(f"Loading model from: {model_path}")
         self.llm = Llama(
             model_path=str(model_path),
-            n_ctx=2048,
+            n_ctx=8192,
             n_threads=4,
             n_gpu_layers=0,
             verbose=False
@@ -40,7 +40,7 @@ class LLMExtractor:
         1) company_name = the supplier/vendor/emitter of the invoice (the company issuing the invoice), not the client/project/funder/delivery address.
         • Prefer header/logo text; labels "Supplier", "Vendor", "From", "Remit To"; names near tax IDs (GST/HST/VAT) or supplier address.
         • Ignore entities labeled "Bill To", "Ship To", "Client", "Owner", "Project", "Funding Recipient", "Attention".
-        • HARD NEGATIVES (never return as company_name): "Toronto Waterfront Revitalization", "Waterfront Toronto", "TWRC", "Toronto Waterfront Revitalization Corporation".
+        • HARD NEGATIVES (never return as company_name): "Toronto Waterfront Revitalization Corporation", "Toronto Waterfront Revitalization", "Waterfront Toronto", "TWRC".
 
         2) invoice_number: pick the value nearest labels "Invoice", "Invoice No", "Invoice #", "Inv.", "Facture", "No. de facture". Alphanumeric (e.g., INV-2025-1234) is allowed.
 

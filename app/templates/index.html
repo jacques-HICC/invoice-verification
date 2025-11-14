@@ -75,10 +75,39 @@
             cursor: pointer;
             border-top: 1px solid #444;
             user-select: none;
+            position: relative;
+        }
+
+        .console-header::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 0;
+            right: 0;
+            height: 10px;
+            cursor: ns-resize;
+            z-index: 1;
         }
 
         .console-header:hover {
             background: #3d3d3d;
+        }
+
+        .resize-handle {
+            position: absolute;
+            top: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 6px;
+            background: #555;
+            border-radius: 3px;
+            cursor: ns-resize;
+            z-index: 2;
+        }
+
+        .resize-handle:hover {
+            background: #777;
         }
 
         #sync-output {
@@ -102,26 +131,136 @@
 
         .validation-section {
             display: flex;
-            gap: 2rem;
+            gap: 1rem;
+            height: calc(100vh - 110px - 2rem);
         }
         
         .invoice-preview, .fields-panel {
             border: 1px solid #ddd;
             padding: 1rem;
-            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
         }
         
-        .invoice-preview img {
-            width: 100%;
-            height: auto;
+        .invoice-preview {
+            position: relative;
+            flex: 0 0 60%;
+        }
+
+        .fields-panel {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .preview-header h2 {
+            margin: 0;
+        }
+
+        .preview-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+
+        .refresh-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 10;
+            background: white;
             border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .zoom-controls button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: white;
+            cursor: pointer;
+            font-size: 18px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .zoom-controls button:hover {
+            background: #f0f0f0;
+        }
+
+        .zoom-level {
+            font-size: 12px;
+            text-align: center;
+            padding: 4px;
+            color: #666;
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+            margin: 2px 0;
+        }
+
+        #invoice-display {
+            position: relative;
+            flex: 1;
+            overflow: auto;
+            cursor: grab;
+            border: 1px solid #ddd;
+            background: #fafafa;
+        }
+
+        #invoice-display:active {
+            cursor: grabbing;
+        }
+
+        #invoice-display img {
+            display: block;
+            max-width: none;
+            transform-origin: 0 0;
+            transition: transform 0.05s ease-out;
         }
 
         .page-navigation {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 1rem;
             padding: 0.5rem;
             background: #f5f5f5;
             border-radius: 4px;
@@ -155,8 +294,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 400px;
-            background: #f5f5f5;
+            height: 100%;
             color: #666;
         }
 
@@ -468,6 +606,19 @@
                         <button id="next-page-btn" onclick="nextPage()">Next ▶</button>
                     </div>
                     <h2>Invoice Preview</h2>
+                    <div class="preview-actions">
+                        <button class="refresh-btn" onclick="refreshInvoice()" id="refresh-btn">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="zoom-controls">
+                    <button onclick="zoomIn()" title="Zoom In">+</button>
+                    <div class="zoom-level" id="zoom-level">100%</div>
+                    <button onclick="zoomOut()" title="Zoom Out">−</button>
+                    <button onclick="resetZoom()" title="Reset Zoom">⟲</button>
+                    <button onclick="fitToWidth()" title="Fit Width">⬌</button>
                 </div>
 
                 <div id="invoice-display">
@@ -511,6 +662,7 @@
 
     <div id="sync-output-container">
         <div class="console-header" onclick="toggleConsole()">
+            <div class="resize-handle" onclick="event.stopPropagation()"></div>
             <span>Console</span>
             <span id="console-toggle">▲</span>
         </div>
@@ -564,14 +716,65 @@
     let currentPage = 0;
     let totalPages = 1;
 
+    // Zoom and pan variables
+    let scale = 1;
+    let panning = false;
+    let pointX = 0;
+    let pointY = 0;
+    let start = { x: 0, y: 0 };
+    let currentImg = null;
+
+    // Console resize variables
+    let consoleResizing = false;
+    let consoleHeight = 250;
+
+    function setupConsoleResize() {
+        const handle = document.querySelector('.resize-handle');
+        const output = document.getElementById('sync-output');
+        const main = document.getElementById('main-content');
+
+        handle.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            consoleResizing = true;
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!consoleResizing) return;
+            
+            const newHeight = window.innerHeight - e.clientY;
+            if (newHeight >= 50 && newHeight <= 600) {
+                consoleHeight = newHeight;
+                output.style.height = `${consoleHeight}px`;
+                main.style.marginBottom = `${consoleHeight + 40}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (consoleResizing) {
+                consoleResizing = false;
+                document.body.style.userSelect = '';
+            }
+        });
+    }
+
     function toggleConsole() {
         const output = document.getElementById('sync-output');
         const toggle = document.getElementById('console-toggle');
         const main = document.getElementById('main-content');
         
-        output.classList.toggle('expanded');
-        main.classList.toggle('console-expanded');
-        toggle.textContent = output.classList.contains('expanded') ? '▼' : '▲';
+        if (output.classList.contains('expanded')) {
+            output.classList.remove('expanded');
+            output.style.height = '0';
+            main.classList.remove('console-expanded');
+            main.style.marginBottom = '40px';
+            toggle.textContent = '▲';
+        } else {
+            output.classList.add('expanded');
+            output.style.height = `${consoleHeight}px`;
+            main.style.marginBottom = `${consoleHeight + 40}px`;
+            toggle.textContent = '▼';
+        }
     }
 
     async function fetchStats() {
@@ -630,11 +833,153 @@
         }
     }
 
+    function setupPanZoom() {
+        const display = document.getElementById('invoice-display');
+
+        // Mouse wheel zoom
+        display.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            const newScale = Math.max(0.5, Math.min(5, scale + delta));
+            
+            if (currentImg) {
+                const rect = display.getBoundingClientRect();
+                const offsetX = e.clientX - rect.left;
+                const offsetY = e.clientY - rect.top;
+                
+                zoom(newScale, offsetX, offsetY);
+            }
+        });
+
+        // Pan with mouse drag
+        display.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            start = { x: e.clientX - pointX, y: e.clientY - pointY };
+            panning = true;
+        });
+
+        display.addEventListener('mousemove', (e) => {
+            if (!panning) return;
+            e.preventDefault();
+            pointX = e.clientX - start.x;
+            pointY = e.clientY - start.y;
+            updateTransform();
+        });
+
+        display.addEventListener('mouseup', () => {
+            panning = false;
+        });
+
+        display.addEventListener('mouseleave', () => {
+            panning = false;
+        });
+
+        // Touch support
+        let lastDistance = 0;
+        display.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                lastDistance = getDistance(e.touches[0], e.touches[1]);
+            } else if (e.touches.length === 1) {
+                start = { 
+                    x: e.touches[0].clientX - pointX, 
+                    y: e.touches[0].clientY - pointY 
+                };
+                panning = true;
+            }
+        });
+
+        display.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 2) {
+                const distance = getDistance(e.touches[0], e.touches[1]);
+                const delta = (distance - lastDistance) * 0.01;
+                const newScale = Math.max(0.5, Math.min(5, scale + delta));
+                zoom(newScale, display.offsetWidth / 2, display.offsetHeight / 2);
+                lastDistance = distance;
+            } else if (e.touches.length === 1 && panning) {
+                pointX = e.touches[0].clientX - start.x;
+                pointY = e.touches[0].clientY - start.y;
+                updateTransform();
+            }
+        });
+
+        display.addEventListener('touchend', () => {
+            panning = false;
+        });
+    }
+
+    function getDistance(touch1, touch2) {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function zoom(newScale, offsetX, offsetY) {
+        if (!currentImg) return;
+        
+        const oldScale = scale;
+        scale = newScale;
+
+        // Adjust pan to zoom towards cursor position
+        pointX = offsetX - (offsetX - pointX) * (scale / oldScale);
+        pointY = offsetY - (offsetY - pointY) * (scale / oldScale);
+
+        updateTransform();
+        updateZoomDisplay();
+    }
+
+    function updateTransform() {
+        if (currentImg) {
+            currentImg.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+        }
+    }
+
+    function updateZoomDisplay() {
+        document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+    }
+
+    function zoomIn() {
+        const display = document.getElementById('invoice-display');
+        const newScale = Math.min(5, scale + 0.2);
+        zoom(newScale, display.offsetWidth / 2, display.offsetHeight / 2);
+    }
+
+    function zoomOut() {
+        const display = document.getElementById('invoice-display');
+        const newScale = Math.max(0.5, scale - 0.2);
+        zoom(newScale, display.offsetWidth / 2, display.offsetHeight / 2);
+    }
+
+    function resetZoom() {
+        scale = 1;
+        pointX = 0;
+        pointY = 0;
+        updateTransform();
+        updateZoomDisplay();
+    }
+
+    function fitToWidth() {
+        if (!currentImg) return;
+        const display = document.getElementById('invoice-display');
+        const containerWidth = display.offsetWidth - 20;
+        const imageWidth = currentImg.naturalWidth;
+        scale = containerWidth / imageWidth;
+        pointX = 10;
+        pointY = 10;
+        updateTransform();
+        updateZoomDisplay();
+    }
+
     async function loadInvoicePage(nodeId, page) {
         try {
             const img = document.createElement('img');
             img.src = `/api/invoice_image/${nodeId}/${page}`;
             img.alt = `Invoice page ${page + 1}`;
+            
+            img.onload = () => {
+                currentImg = img;
+                resetZoom();
+            };
             
             document.getElementById('invoice-display').innerHTML = '';
             document.getElementById('invoice-display').appendChild(img);
@@ -717,6 +1062,17 @@
             document.getElementById('invoice-display').innerHTML = 
                 `<div class="no-invoices">❌ Error loading invoice: ${err.message}</div>`;
         }
+    }
+
+    async function refreshInvoice() {
+        const refreshBtn = document.getElementById('refresh-btn');
+        const originalText = refreshBtn.textContent;
+        refreshBtn.textContent = '🔄 Loading...';
+        
+        await fetchStats();
+        await loadNextInvoice();
+        
+        refreshBtn.textContent = originalText;
     }
 
     function previousPage() {
@@ -955,6 +1311,8 @@
     }
 
     // Initialize on page load
+    setupConsoleResize();
+    setupPanZoom();
     fetchStats();
     loadAvailableModels();
     loadNextInvoice();

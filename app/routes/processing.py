@@ -1,6 +1,7 @@
 from flask import Blueprint, request, Response, current_app
 import os
 import tempfile
+import time
 
 processing_bp = Blueprint('processing', __name__)
 
@@ -35,6 +36,8 @@ def process_with_ai():
             
             # Process each invoice
             for i, invoice in enumerate(unprocessed, 1):
+                invoice_start_time = time.time()
+                
                 node_id = invoice.get('NodeID')
                 filename = invoice.get('Filename', f'Invoice_{node_id}')
                 
@@ -42,7 +45,8 @@ def process_with_ai():
                 
                 try:
                     # Download from GCDocs
-                    yield f"data:   📥 Downloading from GCDocs (Node: {node_id})...\n\n"
+                    download_start = time.time()
+                    yield f"data:     📥 Downloading from GCDocs (Node: {node_id})...\n\n"
                     
                     # Make sure temp folder exists
                     temp_dir = os.path.join(os.getcwd(), "temp")
@@ -52,22 +56,29 @@ def process_with_ai():
                     
                     # Download using API-safe method
                     gcdocs_global.download_file(node_id=node_id, save_path=pdf_path)
-                    yield f"data:   ✓ PDF saved to {pdf_path}\n\n"
+                    download_time = time.time() - download_start
+                    yield f"data:     ✓ PDF downloaded ({download_time:.1f}s)\n\n"
                     print(f"📥 Invoice saved to: {pdf_path}")
                     
                     # OCR
-                    yield f"data:   👁️ Performing OCR...\n\n"
+                    ocr_start = time.time()
+                    yield f"data:     👁️ Performing OCR...\n\n"
                     from processing.ocr import perform_ocr
                     ocr_text = perform_ocr(pdf_path)
+                    ocr_time = time.time() - ocr_start
+                    yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {len(ocr_text)} chars)\n\n"
                     print(f"📝 Text passed to LLM ({len(ocr_text)} chars):\n{ocr_text[:500]}")
 
                     # Extract with LLM
-                    yield f"data:   🤖 Extracting data with AI...\n\n"
+                    extraction_start = time.time()
+                    yield f"data:     🤖 Extracting data with AI...\n\n"
                     extracted = extractor.extract_invoice_data(ocr_text)
+                    extraction_time = time.time() - extraction_start
+                    yield f"data:     ✓ AI extraction complete ({extraction_time:.1f}s)\n\n"
                     print(f"🔍 DEBUG: Extracted data: {extracted}")
 
                     # Update SharePoint
-                    yield f"data:   💾 Updating SharePoint...\n\n"
+                    yield f"data:     💾 Updating SharePoint...\n\n"
                     sp_tracker_global.create_or_update_item(
                         node_id=int(node_id),
                         filename=filename,
@@ -84,12 +95,15 @@ def process_with_ai():
 
                     # delete the local file
                     os.remove(pdf_path)
-                    yield f"data:   ✅ Complete (Confidence: {extracted.get('confidence', 0) * 100:.0f}%)\n\n"
+                    
+                    total_time = time.time() - invoice_start_time
+                    yield f"data:     ✅ Complete in {total_time:.1f}s (Confidence: {extracted.get('confidence', 0) * 100:.0f}%)\n\n"
 
                 except Exception as e:
                     import traceback
-                    yield f"data:   ❌ Error: {str(e)}\n\n"
-                    yield f"data:   {traceback.format_exc()}\n\n"
+                    total_time = time.time() - invoice_start_time
+                    yield f"data:     ❌ Error after {total_time:.1f}s: {str(e)}\n\n"
+                    yield f"data:     {traceback.format_exc()}\n\n"
                     continue
             
             yield "data: \n🎉 All invoices processed!\n\n"
