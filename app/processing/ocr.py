@@ -6,7 +6,9 @@ import io
 import os
 import numpy as np
 
-# Initialize EasyOCR reader once (reused across calls)
+from config import OCRConfig
+
+# Global reader instance for lazy loading
 _reader = None
 
 def get_ocr_reader():
@@ -57,7 +59,11 @@ def perform_ocr(pdf_path: str, preprocess: bool = True) -> str:
             #print(f"  → Saved debug image: {debug_img_path}")
 
             if preprocess:
-                image = preprocess_image(image)
+                image = preprocess_image(
+                    image, 
+                    contrast=OCRConfig.PREPROCESS_CONTRAST, 
+                    sharpen=OCRConfig.PREPROCESS_SHARPEN
+                )
 
             # EasyOCR returns list of (bbox, text, confidence)
             image_np = np.array(image)
@@ -79,10 +85,10 @@ def perform_ocr(pdf_path: str, preprocess: bool = True) -> str:
     except Exception as e:
         raise Exception(f"OCR failed for {pdf_path}: {str(e)}")
 
-def preprocess_image(image: Image.Image) -> Image.Image:
-    """Preprocess image for better OCR accuracy"""
+def preprocess_image(image: Image.Image, contrast: float = 2.0, sharpen: bool = True) -> Image.Image:
     image = image.convert("L")
     enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2.0)
-    image = image.filter(ImageFilter.SHARPEN)
+    image = enhancer.enhance(contrast)
+    if sharpen:
+        image = image.filter(ImageFilter.SHARPEN)
     return image

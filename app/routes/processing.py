@@ -19,6 +19,7 @@ def process_with_ai():
             # Initialize LLM
             yield "data: 🤖 Loading AI model...\n\n"
             from app.processing.extraction import LLMExtractor
+            from app.processing.file_converter import FileConverter
             extractor = LLMExtractor(model_filename)
             yield f"data: ✓ Model loaded: {model_filename}\n\n"
             
@@ -43,22 +44,39 @@ def process_with_ai():
                 
                 yield f"data: \n[{i}/{len(unprocessed)}] {filename}\n\n"
                 
+                pdf_to_cleanup = None  # Track if we need to delete converted PDF
+                
                 try:
                     # Download from GCDocs
                     download_start = time.time()
                     yield f"data:     📥 Downloading from GCDocs (Node: {node_id})...\n\n"
                     
-                    # Make sure temp folder exists
                     temp_dir = os.path.join(os.getcwd(), "temp")
                     os.makedirs(temp_dir, exist_ok=True)
 
-                    pdf_path = os.path.join(temp_dir, f"invoice_{node_id}.pdf")
+                    # Get file extension from filename
+                    file_ext = os.path.splitext(filename)[1].lower()
+                    download_path = os.path.join(temp_dir, f"invoice_{node_id}{file_ext}")
                     
-                    # Download using API-safe method
-                    gcdocs_global.download_file(node_id=node_id, save_path=pdf_path)
+                    # Download file
+                    gcdocs_global.download_file(node_id=node_id, save_path=download_path)
                     download_time = time.time() - download_start
-                    yield f"data:     ✓ PDF downloaded ({download_time:.1f}s)\n\n"
-                    print(f"📥 Invoice saved to: {pdf_path}")
+                    yield f"data:     ✓ File downloaded ({download_time:.1f}s)\n\n"
+                    
+                    # Convert to PDF if needed
+                    if FileConverter.needs_conversion(download_path):
+                        yield f"data:     🔄 Converting {file_ext} to PDF...\n\n"
+                        convert_start = time.time()
+                        pdf_path = FileConverter.convert_to_pdf(download_path)
+                        convert_time = time.time() - convert_start
+                        yield f"data:     ✓ Converted to PDF ({convert_time:.1f}s)\n\n"
+                        
+                        # Delete original non-PDF file
+                        os.remove(download_path)
+                        pdf_to_cleanup = pdf_path
+                    else:
+                        pdf_path = download_path
+                        pdf_to_cleanup = download_path
                     
                     # OCR
                     ocr_start = time.time()
@@ -67,7 +85,6 @@ def process_with_ai():
                     ocr_text = perform_ocr(pdf_path)
                     ocr_time = time.time() - ocr_start
                     yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {len(ocr_text)} chars)\n\n"
-                    print(f"📝 Text passed to LLM ({len(ocr_text)} chars):\n{ocr_text[:500]}")
 
                     # Extract with LLM
                     extraction_start = time.time()
@@ -75,7 +92,6 @@ def process_with_ai():
                     extracted = extractor.extract_invoice_data(ocr_text)
                     extraction_time = time.time() - extraction_start
                     yield f"data:     ✓ AI extraction complete ({extraction_time:.1f}s)\n\n"
-                    print(f"🔍 DEBUG: Extracted data: {extracted}")
 
                     # Update SharePoint
                     yield f"data:     💾 Updating SharePoint...\n\n"
@@ -93,14 +109,23 @@ def process_with_ai():
                         }
                     )
 
-                    # delete the local file
-                    os.remove(pdf_path)
+                    # Cleanup
+                    if pdf_to_cleanup and os.path.exists(pdf_to_cleanup):
+                        os.remove(pdf_to_cleanup)
                     
                     total_time = time.time() - invoice_start_time
                     yield f"data:     ✅ Complete in {total_time:.1f}s (Confidence: {extracted.get('confidence', 0) * 100:.0f}%)\n\n"
 
                 except Exception as e:
                     import traceback
+                    
+                    # Cleanup on error
+                    if pdf_to_cleanup and os.path.exists(pdf_to_cleanup):
+                        try:
+                            os.remove(pdf_to_cleanup)
+                        except:
+                            pass
+                    
                     total_time = time.time() - invoice_start_time
                     yield f"data:     ❌ Error after {total_time:.1f}s: {str(e)}\n\n"
                     yield f"data:     {traceback.format_exc()}\n\n"

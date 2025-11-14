@@ -42,7 +42,7 @@ The application expects a SharePoint list with the following **columns and data 
 ---
 
 # Configuration (`config.py`) overview
-
+```bash
 # AI model parameters
 class AIConfig:
     """
@@ -65,7 +65,6 @@ class AIConfig:
 
         [Prompt continues...]
     """
-```bash
 # SharePoint integration
 class SharePointConfig:
     SP_SITE_NAME = "DataScience"                     # SharePoint site name

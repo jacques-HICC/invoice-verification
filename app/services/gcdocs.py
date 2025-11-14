@@ -48,23 +48,6 @@ class GCDocs:
         "human_flagged": False,
         "human_notes": ""
     }
-    
-    def list_nodes(self, parent_id):
-        """List all child nodes in a folder"""
-        url = f"{self.base_url}/nodes/{parent_id}/nodes"
-        response = self.requests_session.get(url, headers=self.headers)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Handle different response formats
-        if "data" in data:
-            nodes = data["data"]
-        elif "results" in data:
-            nodes = data["results"]
-        else:
-            nodes = data if isinstance(data, list) else []
-        
-        return {node["id"]: node["name"] for node in nodes}
 
     def get_node_info(self, node_id):
         """Get full node information including metadata"""
@@ -164,9 +147,63 @@ class GCDocs:
                 "skipped": skipped,
                 "errors": errors
             }
+
+    def list_nodes(self, parent_id):
+        """List all child nodes in a folder with proper pagination"""
+        url = f"{self.base_url}/nodes/{parent_id}/nodes"
+        
+        all_nodes = {}
+        page = 1
+        
+        while True:
+            params = {
+                'page': page
+            }  # Let the API use its default limit
+            
+            response = self.requests_session.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+            if page == 1:
+                print(f"API Response keys: {data.keys()}")
+                print(f"Paging info: {data.get('paging', 'No paging key')}")
+            # Handle different response formats
+            if "data" in data:
+                nodes = data["data"]
+                # Check for pagination info
+                paging = data.get("paging", {})
+            elif "results" in data:
+                nodes = data["results"]
+                paging = data.get("paging", {})
+            else:
+                nodes = data if isinstance(data, list) else []
+                paging = {}
+            
+            # Add nodes from this page
+            for node in nodes:
+                all_nodes[node["id"]] = node["name"]
+            
+            # Check if there are more pages
+            # Common pagination indicators:
+            # - paging.get("next") exists
+            # - len(nodes) == limit (full page means might be more)
+            # - data.get("total") > len(all_nodes)
+            
+            has_next = paging.get("next") is not None
+            full_page = len(nodes) >= 20  # If we got results, might be more
+            total_count = data.get("total") or paging.get("total")
+            
+            if has_next or (full_page and (not total_count or len(all_nodes) < total_count)):
+                page += 1
+                print(f"Fetching page {page}... (found {len(all_nodes)} so far)")
+            else:
+                break
+        
+        print(f"Total nodes retrieved: {len(all_nodes)}")
+        return all_nodes
+
     def download_file(self, node_id: int, save_path: str):
         url = f"{self.base_url}/nodes/{node_id}/content"
-        response = requests.get(url, headers=self.headers, stream=True)
+        response = self.requests_session.get(url, headers=self.headers, stream=True)  # Fixed: use self.requests_session
         response.raise_for_status()
 
         with open(save_path, "wb") as f:

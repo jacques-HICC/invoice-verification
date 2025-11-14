@@ -58,9 +58,21 @@ class SharePointConfig:
     TENANT_NAME = "142gc.sharepoint.com"            # Tenant / domain
 
 class OCRConfig:
+    # DPI settings for PDF rendering
     DEFAULT_DPI = 300
     DPI_OPTIONS = [150, 300, 600]  # Fast, Normal, High Quality
-    DEFAULT_LANGUAGE = "eng"
+    
+    # EasyOCR settings
+    DEFAULT_LANGUAGE = "en"  # EasyOCR uses 'en' not 'eng'
+    USE_GPU = False  # Set to True if you have CUDA-capable GPU
+    OCR_VERBOSE = False  # Set to True for debug output
+    
+    # Image preprocessing
+    PREPROCESS_CONTRAST = 2.0  # Contrast enhancement factor
+    PREPROCESS_SHARPEN = True  # Apply sharpening filter
+
+    # maximum pages that will be OCR'd per invoice
+    MAX_OCR_PAGES = 5
 
 class GCDocsConfig:
     """
