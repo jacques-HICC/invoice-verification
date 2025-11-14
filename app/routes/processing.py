@@ -80,9 +80,10 @@ def process_with_ai():
                     
                     # OCR
                     ocr_start = time.time()
-                    yield f"data:     👁️ Performing OCR...\n\n"
+                    yield f"data:     👁️ Performing OCR (max 5 pages)...\n\n"
                     from app.processing.ocr import perform_ocr
-                    ocr_text = perform_ocr(pdf_path)
+                    from config import OCRConfig
+                    ocr_text = perform_ocr(pdf_path, max_pages=OCRConfig.MAX_OCR_PAGES)
                     ocr_time = time.time() - ocr_start
                     yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {len(ocr_text)} chars)\n\n"
 

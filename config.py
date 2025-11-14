@@ -72,7 +72,7 @@ class OCRConfig:
     PREPROCESS_SHARPEN = True  # Apply sharpening filter
 
     # maximum pages that will be OCR'd per invoice
-    MAX_OCR_PAGES = 5
+    MAX_OCR_PAGES = 1
 
 class GCDocsConfig:
     """

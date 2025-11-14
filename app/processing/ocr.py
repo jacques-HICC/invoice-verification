@@ -20,18 +20,38 @@ def get_ocr_reader():
         print("✅ EasyOCR initialized")
     return _reader
 
-def perform_ocr(pdf_path: str, preprocess: bool = True) -> str:
+def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None) -> str:
+    """
+    Perform OCR on a PDF file.
+    
+    Args:
+        pdf_path: Path to PDF file
+        preprocess: Whether to apply image preprocessing
+        max_pages: Maximum number of pages to OCR (defaults to OCRConfig.MAX_OCR_PAGES)
+    
+    Returns:
+        Extracted text from the PDF
+    """
+    if max_pages is None:
+        max_pages = OCRConfig.MAX_OCR_PAGES
+    
     print(f"\n📄 Starting OCR on: {pdf_path}")
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"File not found: {pdf_path}")
 
     try:
         doc = fitz.open(pdf_path)
-        print(f"✅ Opened PDF with {doc.page_count} pages")
+        total_pages = doc.page_count
+        pages_to_process = min(total_pages, max_pages)
+        
+        print(f"✅ Opened PDF with {total_pages} pages")
+        if total_pages > max_pages:
+            print(f"⚠️ Limiting OCR to first {max_pages} pages (skipping {total_pages - max_pages} pages)")
 
-        # Native text extraction first
+        # Native text extraction first (only check the pages we'll process)
         native_text = ""
-        for i, page in enumerate(doc):
+        for i in range(pages_to_process):
+            page = doc[i]
             text = page.get_text("text")
             native_text += text
             print(f"  → Page {i+1}: native text length = {len(text)}")
@@ -47,16 +67,12 @@ def perform_ocr(pdf_path: str, preprocess: bool = True) -> str:
         reader = get_ocr_reader()
         
         all_text = []
-        for page_num, page in enumerate(doc):
-            print(f"🖼️ Rendering page {page_num + 1} to image...")
+        for page_num in range(pages_to_process):
+            page = doc[page_num]
+            print(f"🖼️ Rendering page {page_num + 1}/{pages_to_process} to image...")
             pix = page.get_pixmap(dpi=300)
             img_data = pix.tobytes("png")
             image = Image.open(io.BytesIO(img_data))
-
-            # Save debug image
-            #debug_img_path = f"debug_page_{page_num+1}.png"
-            #image.save(debug_img_path)
-            #print(f"  → Saved debug image: {debug_img_path}")
 
             if preprocess:
                 image = preprocess_image(
@@ -79,7 +95,11 @@ def perform_ocr(pdf_path: str, preprocess: bool = True) -> str:
             all_text.append(f"--- PAGE {page_num + 1} ---\n{text}")
 
         doc.close()
-        print(f"✅ OCR complete. Total pages processed: {len(all_text)}")
+        
+        if total_pages > max_pages:
+            all_text.append(f"\n--- NOTE: {total_pages - max_pages} additional pages not processed ---")
+        
+        print(f"✅ OCR complete. Pages processed: {pages_to_process}/{total_pages}")
         return "\n\n".join(all_text)
 
     except Exception as e:

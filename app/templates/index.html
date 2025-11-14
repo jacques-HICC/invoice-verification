@@ -1044,6 +1044,7 @@
             document.getElementById('total-amount').value = currentInvoice.ai_total_amount || '';
             document.getElementById('notes').value = '';
             
+            /*
             // Show confidence
             const confidence = currentInvoice.ai_confidence || 0;
             const badge = document.getElementById('confidence-badge');
@@ -1057,7 +1058,7 @@
             } else {
                 badge.className = 'confidence-badge confidence-low';
             }
-            
+            */
             enableForm();
             
         } catch (err) {
