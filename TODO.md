@@ -24,6 +24,6 @@
 - Include few-shot examples in prompt (fictitious data, obfuscated because it will be in devops/git repo)
 - Keep model in memory (don't reinitialize it every run)
 - Resizing the mock console seems broken
-- Killswitch for AI processing
-- move css outside index.html
-- move scripts outside index.html
+- ~~Killswitch for AI processing~~
+- ~~move css outside index.html~~
+- ~~move scripts outside index.html~~
