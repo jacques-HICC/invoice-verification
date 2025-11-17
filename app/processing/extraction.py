@@ -46,15 +46,38 @@ class LLMExtractor:
                 }
                 OR a string (for backward compatibility)
         """
-        # Get the full text from OCR result
+        # Handle different input types
         if isinstance(ocr_result, dict):
             ocr_text = ocr_result.get("full_text", "")
             ocr_method = ocr_result.get("method", "unknown")
             print(f"📊 Using OCR method: {ocr_method}")
-        else:
+        elif isinstance(ocr_result, list):
+            # If it's a list, try to extract text from it (maybe it's a list of page results)
+            print("⚠️ Warning: OCR result is a list, attempting to extract text...")
+            ocr_text = ""
+            for item in ocr_result:
+                if isinstance(item, dict):
+                    ocr_text += item.get("text", "") + "\n"
+                elif isinstance(item, str):
+                    ocr_text += item + "\n"
+            ocr_method = "list_format"
+            print(f"📊 Extracted {len(ocr_text)} chars from list")
+        elif isinstance(ocr_result, str):
             # Backward compatibility if plain text is passed
-            ocr_text = str(ocr_result)
+            ocr_text = ocr_result
             ocr_method = "legacy"
+        else:
+            print(f"❌ Unexpected OCR result type: {type(ocr_result)}")
+            return {
+                "invoice_number": "",
+                "company_name": "",
+                "invoice_date": "",
+                "total_amount": 0.0,
+                "confidence": 0.0,
+                "model_used": self.model_name,
+                "ocr_method": "error",
+                "error": f"Unexpected OCR result type: {type(ocr_result)}"
+            }
         
         # Make sure we have actual text
         if not ocr_text or len(ocr_text.strip()) < 10:
@@ -91,7 +114,7 @@ class LLMExtractor:
         header_slice = clean_text(header_slice)
         footer_slice = clean_text(footer_slice)
 
-        # Build a more explicit prompt
+        # prompt from AIConfig class in config.py
         prompt = AIConfig.INVOICE_EXTRACTION_PROMPT.format(
             header_slice=header_slice,
             footer_slice=footer_slice
@@ -112,7 +135,7 @@ class LLMExtractor:
 
         # If output is all dashes or garbage, try again with simpler prompt
         if not output_text or len(output_text) < 10 or output_text.count('-') > len(output_text) * 0.5:
-            print("⚠️ LLM output looks like garbage, trying simplified prompt...")
+            print("⚠️ LLM output is unusable, trying simplified prompt...")
             
             simple_prompt = f"""Extract invoice data from this text and return JSON only:
 
@@ -173,6 +196,15 @@ JSON:"""
         except json.JSONDecodeError as e:
             print(f"❌ JSON Parse Error: {str(e)}")
             print(f"❌ Failed to parse output: {output_text[:200]}")
+            
+            # Safely get ocr_method
+            if isinstance(ocr_result, dict):
+                ocr_method = ocr_result.get("method", "unknown")
+            elif isinstance(ocr_result, list):
+                ocr_method = "list_format"
+            else:
+                ocr_method = "legacy"
+            
             return {
                 "invoice_number": "",
                 "company_name": "",

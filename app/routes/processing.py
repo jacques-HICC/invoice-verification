@@ -89,6 +89,7 @@ def process_with_ai():
                         pdf_path = download_path
                         pdf_to_cleanup = download_path
                     
+                    yield f"data:    👀 Accessing invoice text (Node: {node_id})\n\n"
                     # OCR - NOW RETURNS A DICT
                     ocr_start = time.time()
                     ocr_result = perform_ocr(pdf_path, max_pages=OCRConfig.MAX_OCR_PAGES)
@@ -106,7 +107,7 @@ def process_with_ai():
 
                     # Extract with LLM - Pass the dict result
                     extraction_start = time.time()
-                    yield f"data:     🤖 Extracting data with AI...\n\n"
+                    yield f"data:     🤖 Extracting data from invoice text with AI...(Node: {node_id})\n\n"
                     extracted = extractor.extract_invoice_data(ocr_result)
                     extraction_time = time.time() - extraction_start
                     yield f"data:     ✓ AI extraction complete ({extraction_time:.1f}s)\n\n"
