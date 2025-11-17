@@ -53,9 +53,10 @@ def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None, n
     first_page_text = doc[0].get_text("text").strip()
     print(f"📊 First page native text length: {len(first_page_text)} chars")
 
-    # If first page has good native text, assume whole doc does
+    # Smart decision: If first page has reasonable native text, extract all pages natively
+    # BUT then verify the full extraction isn't too sparse
     if len(first_page_text) > native_threshold:
-        print(f"✅ Using PyMuPDF native extraction (first page check passed)")
+        print(f"✅ First page check passed, extracting all pages natively...")
         
         # Extract all page texts
         pages_data = []
@@ -65,17 +66,28 @@ def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None, n
             native_text += page_text
             pages_data.append({"page_num": i+1, "text": page_text})
         
-        doc.close()
+        # SMART FALLBACK: Check if total extraction is actually useful
+        total_chars = len(native_text.strip())
+        print(f"📊 Total native text extracted: {total_chars} chars")
         
-        return {
-            "method": "pymupdf",
-            "full_text": native_text,
-            "pages": pages_data,
-            "total_pages": pages_to_process
-        }
+        if total_chars < 200:
+            print(f"⚠️ Native extraction too sparse ({total_chars} chars < 200), falling back to OCR...")
+            # Don't close doc yet - we need it for OCR
+            # Clear the native data and fall through to OCR
+        else:
+            print(f"✅ Native extraction successful with {total_chars} chars")
+            doc.close()
+            return {
+                "method": "pymupdf",
+                "full_text": native_text,
+                "pages": pages_data,
+                "total_pages": pages_to_process
+            }
+    else:
+        print(f"⚠️ First page has insufficient text ({len(first_page_text)} chars)")
 
     # --- OCR fallback with PaddleOCR ---
-    print(f"⚠️ Native text insufficient ({len(first_page_text)} chars), performing OCR...")
+    print(f"🔄 Starting PaddleOCR processing...")
     ocr = get_ocr_reader()
     
     ocr_results = {

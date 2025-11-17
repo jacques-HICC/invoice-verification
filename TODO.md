@@ -25,3 +25,5 @@
 - Keep model in memory (don't reinitialize it every run)
 - Resizing the mock console seems broken
 - Killswitch for AI processing
+- move css outside index.html
+- move scripts outside index.html
