@@ -16,6 +16,12 @@
 - Overlay preview section for loading
 - Some function for "not an invoice" in previewer.. Maybe tie this to additional SharePoint field so we ignore it in training and subsequent runs
 - Make mock console logs cooler looking
-- Make mock console scrollable
+- ~~Make mock console scrollable~~
 - Make button to go to sharepoint list
 - Back button to edit sharepoint list
+- Log ocr text to gcdocs training folder
+- ~~Swap to paddleOCR~~
+- Include few-shot examples in prompt (fictitious data, obfuscated because it will be in devops/git repo)
+- Keep model in memory (don't reinitialize it every run)
+- Resizing the mock console seems broken
+- Killswitch for AI processing
