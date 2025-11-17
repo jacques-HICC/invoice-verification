@@ -163,40 +163,48 @@ class GCDocs:
             response = self.requests_session.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             data = response.json()
+            
             if page == 1:
                 print(f"API Response keys: {data.keys()}")
-                print(f"Paging info: {data.get('paging', 'No paging key')}")
+                print(f"Total count from API: {data.get('total_count', 'N/A')}")
+                print(f"Page total: {data.get('page_total', 'N/A')}")
+            
             # Handle different response formats
             if "data" in data:
                 nodes = data["data"]
-                # Check for pagination info
-                paging = data.get("paging", {})
             elif "results" in data:
                 nodes = data["results"]
-                paging = data.get("paging", {})
             else:
                 nodes = data if isinstance(data, list) else []
-                paging = {}
             
             # Add nodes from this page
             for node in nodes:
                 all_nodes[node["id"]] = node["name"]
             
-            # Check if there are more pages
-            # Common pagination indicators:
-            # - paging.get("next") exists
-            # - len(nodes) == limit (full page means might be more)
-            # - data.get("total") > len(all_nodes)
+            # Get total count - check multiple possible locations
+            total_count = data.get("total_count") or data.get("total") or data.get("paging", {}).get("total")
+            page_total = data.get("page_total", 1)  # Total number of pages
             
-            has_next = paging.get("next") is not None
-            full_page = len(nodes) >= 20  # If we got results, might be more
-            total_count = data.get("total") or paging.get("total")
+            print(f"Page {page}: got {len(nodes)} nodes (total so far: {len(all_nodes)})")
             
-            if has_next or (full_page and (not total_count or len(all_nodes) < total_count)):
-                page += 1
-                print(f"Fetching page {page}... (found {len(all_nodes)} so far)")
-            else:
+            # Stop conditions (in order of reliability):
+            # 1. If we've retrieved all nodes according to total_count
+            if total_count and len(all_nodes) >= total_count:
+                print(f"✓ Retrieved all {total_count} nodes")
                 break
+            
+            # 2. If current page >= total pages
+            if page >= page_total:
+                print(f"✓ Reached last page ({page}/{page_total})")
+                break
+            
+            # 3. If this page returned no nodes
+            if len(nodes) == 0:
+                print("✓ No more nodes in this page")
+                break
+            
+            # Otherwise, fetch next page
+            page += 1
         
         print(f"Total nodes retrieved: {len(all_nodes)}")
         return all_nodes

@@ -1,14 +1,25 @@
-from flask import Blueprint, request, Response, current_app
+from flask import Blueprint, request, Response, current_app, session, jsonify
 import os
 import tempfile
 import time
 
 processing_bp = Blueprint('processing', __name__)
 
+from app.processing.ocr import perform_ocr
+from config import OCRConfig
+
 @processing_bp.route('/process_with_ai', methods=['POST'])
 def process_with_ai():
-    sp_tracker_global = current_app.config['SHAREPOINT_TRACKER']
-    gcdocs_global = current_app.config['GCDOCS']
+    # Check authentication FIRST
+    if not session.get('gcdocs_authenticated'):
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    sp_tracker_global = current_app.config.get('SHAREPOINT_TRACKER')
+    gcdocs_global = current_app.config.get('GCDOCS')
+    
+    # Check if services are available
+    if not sp_tracker_global or not gcdocs_global:
+        return jsonify({'error': 'Services not configured'}), 500
     
     data = request.json
     count = data.get('count', 10)
@@ -78,19 +89,25 @@ def process_with_ai():
                         pdf_path = download_path
                         pdf_to_cleanup = download_path
                     
-                    # OCR
+                    # OCR - NOW RETURNS A DICT
                     ocr_start = time.time()
-                    yield f"data:     👁️ Performing OCR (max 5 pages)...\n\n"
-                    from app.processing.ocr import perform_ocr
-                    from config import OCRConfig
-                    ocr_text = perform_ocr(pdf_path, max_pages=OCRConfig.MAX_OCR_PAGES)
+                    ocr_result = perform_ocr(pdf_path, max_pages=OCRConfig.MAX_OCR_PAGES)
                     ocr_time = time.time() - ocr_start
-                    yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {len(ocr_text)} chars)\n\n"
+                    
+                    # Get text length from the dict result
+                    if isinstance(ocr_result, dict):
+                        text_length = len(ocr_result.get('full_text', ''))
+                        ocr_method = ocr_result.get('method', 'unknown')
+                        yield f"data:     ✓ OCR complete via {ocr_method} ({ocr_time:.1f}s, {text_length} chars)\n\n"
+                    else:
+                        # Backward compatibility
+                        text_length = len(ocr_result)
+                        yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {text_length} chars)\n\n"
 
-                    # Extract with LLM
+                    # Extract with LLM - Pass the dict result
                     extraction_start = time.time()
                     yield f"data:     🤖 Extracting data with AI...\n\n"
-                    extracted = extractor.extract_invoice_data(ocr_text)
+                    extracted = extractor.extract_invoice_data(ocr_result)
                     extraction_time = time.time() - extraction_start
                     yield f"data:     ✓ AI extraction complete ({extraction_time:.1f}s)\n\n"
 

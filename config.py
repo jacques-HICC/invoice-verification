@@ -9,8 +9,7 @@ class AIConfig:
     MODEL_PATH = "models/mistral-7b.gguf"  # Path to the model file
 
     # Default prompt for invoice extraction
-    INVOICE_EXTRACTION_PROMPT = """
-        You are an information extraction model. Extract invoice fields from OCR text and return a STRICT JSON object with EXACTLY these keys:
+    INVOICE_EXTRACTION_PROMPT = """You are an information extraction model. Extract invoice fields from OCR text and return a STRICT JSON object with EXACTLY these keys:
 
         - "invoice_number" (string)
         - "company_name" (string)
@@ -41,10 +40,10 @@ class AIConfig:
         }}
 
         Invoice OCR text (header + footer slice):
-        {header_text}
+        {header_slice}
 
         ...
-        {footer_text}
+        {footer_slice}
 
         Return ONLY the JSON object.
         """
@@ -58,20 +57,7 @@ class SharePointConfig:
     TENANT_NAME = "142gc.sharepoint.com"            # Tenant / domain
 
 class OCRConfig:
-    # DPI settings for PDF rendering
-    DEFAULT_DPI = 300
-    DPI_OPTIONS = [150, 300, 600]  # Fast, Normal, High Quality
-    
-    # EasyOCR settings
-    DEFAULT_LANGUAGE = "en"  # EasyOCR uses 'en' not 'eng'
-    USE_GPU = False  # Set to True if you have CUDA-capable GPU
-    OCR_VERBOSE = False  # Set to True for debug output
-    
-    # Image preprocessing
-    PREPROCESS_CONTRAST = 2.0  # Contrast enhancement factor
-    PREPROCESS_SHARPEN = True  # Apply sharpening filter
-
-    # maximum pages that will be OCR'd per invoice
+    # Maximum pages that will be OCR'd per invoice
     MAX_OCR_PAGES = 1
 
 class GCDocsConfig:
