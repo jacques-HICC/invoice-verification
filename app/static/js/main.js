@@ -16,6 +16,10 @@ let currentImg = null;
 let consoleResizing = false;
 let consoleHeight = 250;
 
+// Processing state
+let isProcessing = false;
+let processingAbortController = null;
+
 function setupConsoleResize() {
     const handle = document.querySelector('.resize-handle');
     const output = document.getElementById('sync-output');
@@ -429,6 +433,12 @@ function openProcessDialog() {
     const unprocessed = parseInt(document.getElementById('unprocessed-count').textContent);
     if (unprocessed === 0) return;
     
+    // If already processing, cancel instead
+    if (isProcessing) {
+        cancelProcessing();
+        return;
+    }
+    
     const modal = document.getElementById('process-modal');
     const slider = document.getElementById('process-count-slider');
     const input = document.getElementById('process-count-input');
@@ -463,20 +473,32 @@ function setProcessCount(value) {
 async function startProcessing() {
     const count = parseInt(document.getElementById('process-count-input').value);
     const model = document.getElementById('model-select').value;
+    
+    if (!model) {
+        alert('Please select a model first');
+        return;
+    }
+    
     closeProcessDialog();
+    
+    // Set processing state
+    isProcessing = true;
+    processingAbortController = new AbortController();
+    updateProcessButton();
     
     const output = document.getElementById('sync-output');
     if (!output.classList.contains('expanded')) {
         toggleConsole();
     }
     
-    output.textContent = `🤖 Starting AI processing for ${count} invoices...\n`;
+    output.textContent = `🤖 Starting AI processing for ${count} invoices using ${model}...\n`;
     
     try {
         const response = await fetch('/process_with_ai', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ count: count, model: model })
+            body: JSON.stringify({ count: count, model: model }),
+            signal: processingAbortController.signal
         });
         
         const reader = response.body.getReader();
@@ -494,6 +516,8 @@ async function startProcessing() {
                     const msg = line.replace("data: ", "").trim();
                     if (msg === "[DONE]") {
                         output.textContent += "\n✅ AI processing complete!\n";
+                        isProcessing = false;
+                        updateProcessButton();
                         fetchStats();
                         loadNextInvoice();
                         return;
@@ -504,7 +528,43 @@ async function startProcessing() {
             }
         }
     } catch (err) {
-        output.textContent += `\n❌ Error: ${err}\n`;
+        if (err.name === 'AbortError') {
+            output.textContent += `\n🛑 Processing cancelled by user\n`;
+        } else {
+            output.textContent += `\n❌ Error: ${err}\n`;
+        }
+    } finally {
+        isProcessing = false;
+        processingAbortController = null;
+        updateProcessButton();
+        fetchStats();
+    }
+}
+
+function cancelProcessing() {
+    if (processingAbortController) {
+        processingAbortController.abort();
+        const output = document.getElementById('sync-output');
+        output.textContent += `\n⏹️ Stopping process...\n`;
+    }
+}
+
+function updateProcessButton() {
+    const processBtn = document.getElementById('process-btn');
+    if (isProcessing) {
+        processBtn.textContent = '⏹️ Stop Processing';
+        processBtn.style.background = '#6c757d'; // Neutral gray
+        processBtn.style.color = 'white';
+    } else {
+        const unprocessed = parseInt(document.getElementById('unprocessed-count').textContent);
+        processBtn.disabled = unprocessed === 0;
+        processBtn.style.background = ''; // Reset to default
+        processBtn.style.color = ''; // Reset to default
+        if (unprocessed === 0) {
+            processBtn.textContent = '✓ All Processed';
+        } else {
+            processBtn.textContent = '🤖 Process with AI';
+        }
     }
 }
 
@@ -515,7 +575,7 @@ async function startSync() {
         toggleConsole();
     }
     
-    output.textContent = 'Starting sync...\n';
+    output.textContent = '🔄 Starting sync...\n';
 
     const response = await fetch('/sync_to_sharepoint');
     const reader = response.body.getReader();
@@ -547,6 +607,28 @@ function openInGCDocs() {
         window.open(`/api/download_pdf/${currentInvoice.node_id}`, '_blank');
     }
 }
+
+// Cleanup when page is about to close
+window.addEventListener('beforeunload', (e) => {
+    if (isProcessing) {
+        // Cancel the processing
+        if (processingAbortController) {
+            processingAbortController.abort();
+        }
+        
+        // Show warning to user
+        e.preventDefault();
+        e.returnValue = 'AI processing is in progress. Closing will cancel it.';
+        return e.returnValue;
+    }
+});
+
+// Cleanup when visibility changes (tab switch, minimize, etc)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && isProcessing) {
+        console.log('Tab hidden while processing - will cancel if page closes');
+    }
+});
 
 // Initialize on page load
 setupConsoleResize();
