@@ -401,7 +401,8 @@ async function loadNextInvoice() {
         document.getElementById('company-name').value = currentInvoice.ai_company_name || '';
         document.getElementById('invoice-number').value = currentInvoice.ai_invoice_number || '';
         document.getElementById('invoice-date').value = currentInvoice.ai_invoice_date || '';
-        document.getElementById('total-amount').value = currentInvoice.ai_total_amount || '';
+        // Apply formatting on load
+        document.getElementById('total-amount').value = formatCurrency(currentInvoice.ai_total_amount || 0);
         document.getElementById('notes').value = '';
         
         enableForm();
@@ -450,7 +451,8 @@ async function saveAndNext() {
         company_name: document.getElementById('company-name').value,
         invoice_number: document.getElementById('invoice-number').value,
         invoice_date: document.getElementById('invoice-date').value,
-        total_amount: parseFloat(document.getElementById('total-amount').value) || 0,
+        // Clean the formatted string back to a raw float before saving
+        total_amount: parseFloat(cleanCurrency(document.getElementById('total-amount').value)) || 0,
         notes: document.getElementById('notes').value,
         flagged: false
     };
@@ -698,6 +700,27 @@ function openInGCDocs() {
     }
 }
 
+// Helper to format currency for display (e.g. 1234.56 -> $1,234.56)
+function formatCurrency(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '';
+    
+    // standard US/Canada formatting
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency', 
+        currency: 'USD',
+        minimumFractionDigits: 2
+    }).format(num);
+}
+
+// Helper to clean currency for saving/editing (e.g. $1,234.56 -> 1234.56)
+function cleanCurrency(value) {
+    if (!value) return '';
+    // Remove everything that isn't a number, a dot, or a minus sign
+    return value.toString().replace(/[^0-9.-]+/g, "");
+}
+
 // Cleanup when page is about to close
 window.addEventListener('beforeunload', (e) => {
     if (isProcessing) {
@@ -726,6 +749,22 @@ async function initializePage() {
     await fetchStats();
     await loadAvailableModels();
     await loadNextInvoice();
+
+    // Add Currency Interaction Logic
+    const amountInput = document.getElementById('total-amount');
+    
+    // When user clicks to edit: show raw number
+    amountInput.addEventListener('focus', (e) => {
+        const val = e.target.value;
+        e.target.value = cleanCurrency(val);
+    });
+
+    // When user clicks away: show pretty currency
+    amountInput.addEventListener('blur', (e) => {
+        const val = e.target.value;
+        if(val) e.target.value = formatCurrency(val);
+    });
+
 }
 
 // Start initialization

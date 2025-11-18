@@ -60,7 +60,7 @@ def process_with_ai():
                 try:
                     # Download from GCDocs
                     download_start = time.time()
-                    yield f"data:     📥 Downloading from GCDocs (Node: {node_id})...\n\n"
+                    yield f"data:     📥 Downloading from GCDocs (Node: {node_id})\n\n"
                     
                     temp_dir = os.path.join(os.getcwd(), "temp")
                     os.makedirs(temp_dir, exist_ok=True)
@@ -111,7 +111,7 @@ def process_with_ai():
                     extracted = extractor.extract_invoice_data(ocr_result)
                     extraction_time = time.time() - extraction_start
                     yield f"data:     ✓ AI extraction complete ({extraction_time:.1f}s)\n\n"
-
+                    total_time = time.time() - invoice_start_time
                     # Update SharePoint
                     yield f"data:     💾 Updating SharePoint...\n\n"
                     sp_tracker_global.create_or_update_item(
@@ -126,7 +126,8 @@ def process_with_ai():
                             'ai_confidence': extracted.get('confidence', 0),
                             'ai_processed': True,
                             'ocr_method': extracted.get('ocr_method', 'unknown'),
-                            'llm_used': extracted.get('model_used', model_filename)
+                            'llm_used': extracted.get('model_used', model_filename),
+                            'time_taken': extracted.get('time_taken', total_time)
                         }
                     )
 

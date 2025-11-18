@@ -352,6 +352,7 @@ def save_validation():
             # Preserve OCR and LLM tracking fields
             "ocr_method": existing.get("OCR_Method", ""),
             "llm_used": existing.get("LLM_Used", ""),
+            "time_taken": existing.get("Time_Taken", ""),
             
             # Human validation fields from request
             "human_invoice_number": data.get('invoice_number', ''),
