@@ -78,6 +78,8 @@ class SharePointTracker:
             "AI_TotalAmount": float(metadata.get("ai_total_amount", 0)),
             "AI_Processed": bool(metadata.get("ai_processed", False)),
             "AI_Confidence": float(metadata.get("ai_confidence", 0)),
+            "OCR_Method": metadata.get("ocr_method", ""),  # NEW FIELD
+            "LLM_Used": metadata.get("llm_used", ""),      # NEW FIELD
             "Human_InvoiceNumber": metadata.get("human_invoice_number", ""),
             "Human_InvoiceDate": metadata.get("human_invoice_date", ""),
             "Human_CompanyName": metadata.get("human_company_name", ""),

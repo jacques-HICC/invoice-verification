@@ -27,3 +27,5 @@
 - ~~Killswitch for AI processing~~
 - ~~move css outside index.html~~
 - ~~move scripts outside index.html~~
+- ~~Killswitch for AI processing~~
+- ~~Killswitch not preserving state on save + next~~

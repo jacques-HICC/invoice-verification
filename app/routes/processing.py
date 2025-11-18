@@ -124,7 +124,9 @@ def process_with_ai():
                             'ai_invoice_date': extracted.get('invoice_date', ''),
                             'ai_total_amount': extracted.get('total_amount', 0),
                             'ai_confidence': extracted.get('confidence', 0),
-                            'ai_processed': True
+                            'ai_processed': True,
+                            'ocr_method': extracted.get('ocr_method', 'unknown'),
+                            'llm_used': extracted.get('model_used', model_filename)
                         }
                     )
 
@@ -133,7 +135,7 @@ def process_with_ai():
                         os.remove(pdf_to_cleanup)
                     
                     total_time = time.time() - invoice_start_time
-                    yield f"data:     ✅ Complete in {total_time:.1f}s (Confidence: {extracted.get('confidence', 0) * 100:.0f}%)\n\n"
+                    yield f"data:     ✅ Complete in {total_time:.1f}s\n\n"
 
                 except Exception as e:
                     import traceback

@@ -1,8 +1,10 @@
 from paddleocr import PaddleOCR
 from PIL import Image
-import fitz
+import fitz  # PyMuPDF
 import os
 import json
+import gc
+import time
 
 from config import OCRConfig
 
@@ -22,16 +24,9 @@ def get_ocr_reader():
         print("✅ PaddleOCR initialized")
     return _ocr_engine
 
-def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None, native_threshold: int = 25) -> dict:
+def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None) -> dict:
     """
-    Perform OCR on a PDF only if the native text is insufficient.
-    Returns a dictionary with OCR results in structured format.
-    
-    OPTIMIZATIONS:
-    - Removed pdfplumber (redundant with PyMuPDF)
-    - Lower DPI for faster OCR (200 instead of 300)
-    - Only check first page for native text decision
-    - Reuse temp directory instead of creating/deleting
+    Priority: PaddleOCR -> Fallback: PyMuPDF
     """
     if max_pages is None:
         max_pages = OCRConfig.MAX_OCR_PAGES
@@ -40,159 +35,180 @@ def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None, n
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"File not found: {pdf_path}")
 
-    # --- Single method: PyMuPDF native text extraction ---
-    doc = fitz.open(pdf_path)
-    total_pages = doc.page_count
-    pages_to_process = min(total_pages, max_pages)
-    print(f"✅ Opened PDF with {total_pages} pages")
+    doc = None # Initialize as None for safety
     
-    if total_pages > max_pages:
-        print(f"⚠️ Limiting OCR to first {max_pages} pages (skipping {total_pages - max_pages} pages)")
+    # Prepare temp directory for images
+    temp_dir = os.path.join(os.getcwd(), "temp")
+    os.makedirs(temp_dir, exist_ok=True)
 
-    # OPTIMIZATION: Only check first page for native text (much faster decision)
-    first_page_text = doc[0].get_text("text").strip()
-    print(f"📊 First page native text length: {len(first_page_text)} chars")
-
-    # Smart decision: If first page has reasonable native text, extract all pages natively
-    # BUT then verify the full extraction isn't too sparse
-    if len(first_page_text) > native_threshold:
-        print(f"✅ First page check passed, extracting all pages natively...")
-        
-        # Extract all page texts
-        pages_data = []
-        native_text = ""
-        for i in range(pages_to_process):
-            page_text = doc[i].get_text("text")
-            native_text += page_text
-            pages_data.append({"page_num": i+1, "text": page_text})
-        
-        # SMART FALLBACK: Check if total extraction is actually useful
-        total_chars = len(native_text.strip())
-        print(f"📊 Total native text extracted: {total_chars} chars")
-        
-        if total_chars < 200:
-            print(f"⚠️ Native extraction too sparse ({total_chars} chars < 200), falling back to OCR...")
-            # Don't close doc yet - we need it for OCR
-            # Clear the native data and fall through to OCR
-        else:
-            print(f"✅ Native extraction successful with {total_chars} chars")
-            doc.close()
-            return {
-                "method": "pymupdf",
-                "full_text": native_text,
-                "pages": pages_data,
-                "total_pages": pages_to_process
-            }
-    else:
-        print(f"⚠️ First page has insufficient text ({len(first_page_text)} chars)")
-
-    # --- OCR fallback with PaddleOCR ---
-    print(f"🔄 Starting PaddleOCR processing...")
-    ocr = get_ocr_reader()
-    
+    # Initialize result container
     ocr_results = {
         "method": "paddleocr",
         "pages": [],
-        "total_pages": pages_to_process,
+        "total_pages": 0,
         "full_text": ""
     }
     
-    all_text_parts = []
-    temp_dir = "temp_ocr_images"
-    os.makedirs(temp_dir, exist_ok=True)
-
-    for page_num in range(pages_to_process):
-        print(f"    📄 Processing page {page_num + 1}/{pages_to_process}...")
-        page = doc[page_num]
-        
-        # OPTIMIZATION: Lower DPI (200 instead of 300) = 2.25x faster with minimal accuracy loss
-        pix = page.get_pixmap(dpi=200)
-        img_path = os.path.join(temp_dir, f"page_{page_num}.png")
-        pix.save(img_path)
-        
-        try:
-            # Run PaddleOCR prediction
-            result = ocr.predict(input=img_path)
-            
-            page_data = {
-                "page_num": page_num + 1,
-                "blocks": [],
-                "text": ""
-            }
-            
-            page_text_lines = []
-            
-            # Process each result object
-            for res in result:
-                try:
-                    json_data = res.json
-                    
-                    if isinstance(json_data, dict) and 'res' in json_data:
-                        ocr_data = json_data['res']
-                        
-                        # Extract rec_texts, dt_polys, and rec_scores
-                        rec_texts = ocr_data.get('rec_texts', [])
-                        dt_polys = ocr_data.get('dt_polys', [])
-                        rec_scores = ocr_data.get('rec_scores', [])
-                        
-                        print(f"    ✅ Found {len(rec_texts)} text items")
-                        
-                        # Combine texts with their metadata
-                        for i, text_content in enumerate(rec_texts):
-                            if text_content:
-                                block = {
-                                    "text": text_content,
-                                    "bbox": dt_polys[i] if i < len(dt_polys) else [],
-                                    "confidence": float(rec_scores[i]) if i < len(rec_scores) else 0.0
-                                }
-                                page_data["blocks"].append(block)
-                                page_text_lines.append(text_content)
-                    else:
-                        print(f"    ⚠️ 'res' key not found in json data")
-                        
-                except Exception as e:
-                    print(f"    ❌ Error accessing OCR data: {e}")
-            
-            # Join all text for this page
-            page_text = "\n".join(page_text_lines)
-            page_data["text"] = page_text
-            
-            print(f"    ✓ Page {page_num + 1}: Extracted {len(page_text)} chars, {len(page_data['blocks'])} blocks")
-            
-            ocr_results["pages"].append(page_data)
-            all_text_parts.append(f"--- PAGE {page_num + 1} ---\n{page_text}")
-            
-        except Exception as e:
-            print(f"    ❌ Error processing page {page_num + 1}: {e}")
-        finally:
-            # Clean up temporary image immediately after processing
-            if os.path.exists(img_path):
-                os.remove(img_path)
-
-    doc.close()
-    
-    # Clean up temp directory (optional - leaving it doesn't hurt)
     try:
-        os.rmdir(temp_dir)
-    except:
-        pass
-    
-    # Combine all text
-    ocr_results["full_text"] = "\n\n".join(all_text_parts)
-    
-    if total_pages > max_pages:
-        ocr_results["full_text"] += f"\n\n--- NOTE: {total_pages - max_pages} additional pages not processed ---"
-    
-    print(f"✅ OCR complete. Pages processed: {pages_to_process}/{total_pages}")
-    print(f"📊 Total extracted text length: {len(ocr_results['full_text'])} chars")
-    
-    return ocr_results
+        doc = fitz.open(pdf_path)
+        total_pages = doc.page_count
+        pages_to_process = min(total_pages, max_pages)
+        ocr_results["total_pages"] = pages_to_process
+        
+        all_text_parts = []
 
-def get_native_pdf_text(pdf_path: str) -> str:
-    """Extract native text from PDF using PyMuPDF"""
-    doc = fitz.open(pdf_path)
-    text = ""
-    for page in doc:
-        text += page.get_text("text")
-    doc.close()
-    return text
+        # =========================================================================
+        # ATTEMPT 1: PaddleOCR (Primary)
+        # =========================================================================
+        try:
+            print(f"🔄 Starting PaddleOCR processing (Priority Method)...")
+            ocr = get_ocr_reader()
+            
+            for page_num in range(pages_to_process):
+                print(f"    📄 Processing page {page_num + 1}/{pages_to_process}...")
+                page = doc[page_num]
+                
+                # Render page to image
+                pix = page.get_pixmap(dpi=300)
+                
+                # Unique filename to avoid conflicts
+                img_path = os.path.join(temp_dir, f"proc_p{page_num}_{int(time.time())}.png")
+                pix.save(img_path)
+                pix = None # Free memory
+                
+                try:
+                    # --- YOUR SPECIFIC PARSING LOGIC START ---
+                    result = ocr.predict(input=img_path)
+                    
+                    page_data = {
+                        "page_num": page_num + 1,
+                        "blocks": [],
+                        "text": ""
+                    }
+                    
+                    page_text_lines = []
+                    
+                    # Process each result object
+                    for res in result:
+                        try:
+                            json_data = res.json
+                            
+                            if isinstance(json_data, dict) and 'res' in json_data:
+                                ocr_data = json_data['res']
+                                
+                                # Extract rec_texts, dt_polys, and rec_scores
+                                rec_texts = ocr_data.get('rec_texts', [])
+                                dt_polys = ocr_data.get('dt_polys', [])
+                                rec_scores = ocr_data.get('rec_scores', [])
+                                
+                                print(f"    ✅ Found {len(rec_texts)} text items")
+                                
+                                # Combine texts with their metadata
+                                for i, text_content in enumerate(rec_texts):
+                                    if text_content:
+                                        block = {
+                                            "text": text_content,
+                                            "bbox": dt_polys[i] if i < len(dt_polys) else [],
+                                            "confidence": float(rec_scores[i]) if i < len(rec_scores) else 0.0
+                                        }
+                                        page_data["blocks"].append(block)
+                                        page_text_lines.append(text_content)
+                            else:
+                                print(f"    ⚠️ 'res' key not found in json data")
+                                
+                        except Exception as inner_e:
+                            print(f"    ⚠️ Warning parsing specific block: {inner_e}")
+                    
+                    # Join all text for this page
+                    page_text = "\n".join(page_text_lines)
+                    page_data["text"] = page_text
+                    # --- YOUR SPECIFIC PARSING LOGIC END ---
+                    
+                    print(f"    ✓ Page {page_num + 1}: Extracted {len(page_text)} chars")
+                    
+                    ocr_results["pages"].append(page_data)
+                    all_text_parts.append(f"--- PAGE {page_num + 1} ---\n{page_text}")
+                    
+                finally:
+                    # Clean up temporary image immediately
+                    if os.path.exists(img_path):
+                        try:
+                            os.remove(img_path)
+                        except: pass
+            
+            # Check if we actually got text
+            full_text = "\n\n".join(all_text_parts)
+            if not full_text.strip():
+                raise Exception("PaddleOCR produced empty text results")
+                
+            ocr_results["full_text"] = full_text
+            print(f"✅ PaddleOCR complete. Total chars: {len(full_text)}")
+            
+            # CRITICAL FIX: Do NOT close doc here. 
+            # Let the outer finally block handle it.
+            return ocr_results
+
+        # =========================================================================
+        # ATTEMPT 2: PyMuPDF Fallback
+        # =========================================================================
+        except Exception as e:
+            print(f"❌ PaddleOCR Failed: {e}")
+            print(f"⚠️ Falling back to PyMuPDF Native Extraction...")
+            
+            # Reset results for fallback
+            ocr_results = {
+                "method": "pymupdf_fallback",
+                "pages": [],
+                "total_pages": pages_to_process,
+                "full_text": ""
+            }
+            all_text_parts = []
+            
+            try:
+                # We can reuse the open 'doc' object because we didn't close it!
+                for i in range(pages_to_process):
+                    page_text = doc[i].get_text("text")
+                    
+                    page_data = {
+                        "page_num": i+1, 
+                        "text": page_text,
+                        "blocks": [] # Native text doesn't usually give blocks in same format
+                    }
+                    
+                    ocr_results["pages"].append(page_data)
+                    all_text_parts.append(f"--- PAGE {i + 1} ---\n{page_text}")
+                
+                ocr_results["full_text"] = "\n\n".join(all_text_parts)
+                print(f"✅ Fallback successful. Extracted {len(ocr_results['full_text'])} chars.")
+                
+                return ocr_results
+                
+            except Exception as fallback_error:
+                print(f"❌ Critical Error: Both PaddleOCR and Fallback failed: {fallback_error}")
+                return {
+                    "method": "error",
+                    "full_text": "",
+                    "pages": [],
+                    "error": str(e)
+                }
+    
+    # =========================================================================
+    # FINALLY: Cleanup
+    # =========================================================================
+    finally:
+        # This block handles closing for BOTH Success and Failure paths
+        if doc:
+            try:
+                # Safe close check
+                doc.close()
+            except:
+                pass
+        
+        # Cleanup temp dir
+        try:
+            if os.path.exists(temp_dir) and not os.listdir(temp_dir):
+                os.rmdir(temp_dir)
+        except:
+            pass
+        
+        gc.collect()

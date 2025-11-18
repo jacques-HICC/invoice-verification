@@ -19,6 +19,74 @@ let consoleHeight = 250;
 // Processing state
 let isProcessing = false;
 let processingAbortController = null;
+let processingStream = null;
+
+// State restoration
+async function restoreProcessingState() {
+    try {
+        const response = await fetch('/api/processing_state');
+        const state = await response.json();
+        
+        if (state.is_processing) {
+            isProcessing = true;
+            updateProcessButton();
+            
+            // Restore console logs
+            const output = document.getElementById('sync-output');
+            if (state.console_logs && state.console_logs.length > 0) {
+                if (!output.classList.contains('expanded')) {
+                    toggleConsole();
+                }
+                output.textContent = state.console_logs.join('\n') + '\n';
+                output.scrollTop = output.scrollHeight;
+            }
+            
+            // Show status message
+            const statusMsg = `📋 Restored processing session: ${state.current_count}/${state.total_count} invoices processed\n`;
+            output.textContent += statusMsg;
+            
+            // Resume streaming (reconnect to ongoing process)
+            resumeProcessingStream();
+        }
+    } catch (err) {
+        console.error('Error restoring state:', err);
+    }
+}
+
+async function resumeProcessingStream() {
+    // Poll for updates every 2 seconds to catch any new logs
+    const pollInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/processing_state');
+            const state = await response.json();
+            
+            if (!state.is_processing) {
+                clearInterval(pollInterval);
+                isProcessing = false;
+                updateProcessButton();
+                
+                const output = document.getElementById('sync-output');
+                output.textContent += '\n✅ Processing complete!\n';
+                fetchStats();
+                loadNextInvoice();
+                return;
+            }
+            
+            // Update UI with latest logs
+            const output = document.getElementById('sync-output');
+            if (state.console_logs && state.console_logs.length > 0) {
+                output.textContent = state.console_logs.join('\n') + '\n';
+                output.scrollTop = output.scrollHeight;
+            }
+        } catch (err) {
+            console.error('Polling error:', err);
+            clearInterval(pollInterval);
+        }
+    }, 2000);
+    
+    // Store interval ID so we can clear it if needed
+    window.processingPollInterval = pollInterval;
+}
 
 function setupConsoleResize() {
     const handle = document.querySelector('.resize-handle');
@@ -89,11 +157,13 @@ async function fetchStats() {
     input.max = unprocessed;
     
     const processBtn = document.getElementById('process-btn');
-    processBtn.disabled = unprocessed === 0;
-    if (unprocessed === 0) {
-        processBtn.textContent = '✓ All Processed';
-    } else {
-        processBtn.textContent = '🤖 Process with AI';
+    if (!isProcessing) {
+        processBtn.disabled = unprocessed === 0;
+        if (unprocessed === 0) {
+            processBtn.textContent = '✓ All Processed';
+        } else {
+            processBtn.textContent = '🤖 Process with AI';
+        }
     }
 }
 
@@ -541,11 +611,31 @@ async function startProcessing() {
     }
 }
 
-function cancelProcessing() {
-    if (processingAbortController) {
-        processingAbortController.abort();
+async function cancelProcessing() {
+    if (isProcessing) {
+        // Call backend to cancel
+        try {
+            await fetch('/api/cancel_processing', {
+                method: 'POST'
+            });
+        } catch (err) {
+            console.error('Error cancelling:', err);
+        }
+        
+        if (processingAbortController) {
+            processingAbortController.abort();
+        }
+        
+        // Clear polling interval if active
+        if (window.processingPollInterval) {
+            clearInterval(window.processingPollInterval);
+        }
+        
         const output = document.getElementById('sync-output');
-        output.textContent += `\n⏹️ Stopping process...\n`;
+        output.textContent += `\n⏹️ Processing stopped\n`;
+        
+        isProcessing = false;
+        updateProcessButton();
     }
 }
 
@@ -611,28 +701,32 @@ function openInGCDocs() {
 // Cleanup when page is about to close
 window.addEventListener('beforeunload', (e) => {
     if (isProcessing) {
-        // Cancel the processing
-        if (processingAbortController) {
-            processingAbortController.abort();
-        }
-        
-        // Show warning to user
         e.preventDefault();
-        e.returnValue = 'AI processing is in progress. Closing will cancel it.';
+        e.returnValue = 'AI processing is in progress. Closing will keep it running in the background.';
         return e.returnValue;
     }
 });
 
-// Cleanup when visibility changes (tab switch, minimize, etc)
+// Cleanup when visibility changes
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && isProcessing) {
-        console.log('Tab hidden while processing - will cancel if page closes');
+        console.log('Tab hidden while processing - state will be preserved');
     }
 });
 
 // Initialize on page load
-setupConsoleResize();
-setupPanZoom();
-fetchStats();
-loadAvailableModels();
-loadNextInvoice();
+async function initializePage() {
+    setupConsoleResize();
+    setupPanZoom();
+    
+    // Restore processing state first
+    await restoreProcessingState();
+    
+    // Then load other data
+    await fetchStats();
+    await loadAvailableModels();
+    await loadNextInvoice();
+}
+
+// Start initialization
+initializePage();

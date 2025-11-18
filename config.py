@@ -3,50 +3,60 @@ class AIConfig:
     Configuration for AI model parameters.
     Controls context size, generation settings, model path, and prompt templates.
     """
-    CTX_SIZE = 2048             # Context window size (max tokens the model can see at once)
-    TEMPERATURE = 0.1   # Sampling temperature (higher = more creative/random)
-    MAX_TOKENS = 1000   # Max tokens to generate per response
-    MODEL_PATH = "models/mistral-7b.gguf"  # Path to the model file
+    # 2048 is standard, but if you have RAM, 4096 is safer for dense invoices.
+    # 2048 is fine for the slice approach (1200+800 chars is ~500 tokens).
+    CTX_SIZE = 2048             
+    
+    # Lower temperature makes the model more deterministic and stricter with JSON
+    TEMPERATURE = 0.0   
+    
+    MAX_TOKENS = 500   # Reduced: We only need a small JSON object, not a novel.
+    MODEL_PATH = "models/mistral-7b.gguf"
 
-    # Default prompt for invoice extraction
-    INVOICE_EXTRACTION_PROMPT = """You are an information extraction model. Extract invoice fields from OCR text and return a STRICT JSON object with EXACTLY these keys:
+    # Improved Prompt Strategy: "Instruction-Input-Response" pattern
+    INVOICE_EXTRACTION_PROMPT = """### SYSTEM INSTRUCTIONS
+You are a specialized data extraction AI. Your task is to read the provided invoice text segments and extract structured data into a valid JSON object.
 
-        - "invoice_number" (string)
-        - "company_name" (string)
-        - "invoice_date" (string, format YYYY-MM-DD)
-        - "total_amount" (number, no currency symbols or commas)
+### TARGET SCHEMA
+Return a JSON object with EXACTLY these four keys:
+1. "invoice_number": (string) The unique invoice identifier (e.g., "INV-001").
+2. "company_name": (string) The name of the VENDOR/SUPPLIER (the entity getting paid).
+3. "invoice_date": (string) The date of issue in format YYYY-MM-DD.
+4. "total_amount": (float) The final numeric amount due.
 
-        RULES (short and strict):
-        1) company_name = the supplier/vendor/emitter of the invoice (the company issuing the invoice), not the client/project/funder/delivery address.
-        • Prefer header/logo text; labels "Supplier", "Vendor", "From", "Remit To"; names near tax IDs (GST/HST/VAT) or supplier address.
-        • Ignore entities labeled "Bill To", "Ship To", "Client", "Owner", "Project", "Funding Recipient", "Attention".
-        • HARD NEGATIVES (never return as company_name): "Toronto Waterfront Revitalization Corporation", "Toronto Waterfront Revitalization", "Waterfront Toronto", "TWRC".
+### CRITICAL EXTRACTION RULES
+- COMPANY NAME:
+  - You must extract the VENDOR name, usually found at the top left or in a logo.
+  - IGNORE the "Bill To" or "Client" name.
+  - NEGATIVE CONSTRAINT: The company is NOT "Toronto Waterfront Revitalization Corporation", "Waterfront Toronto", "TWRC", or "Waterfront". These are the clients. Look for the OTHER company name.
 
-        2) invoice_number: pick the value nearest labels "Invoice", "Invoice No", "Invoice #", "Inv.", "Facture", "No. de facture". Alphanumeric (e.g., INV-2025-1234) is allowed.
+- TOTAL AMOUNT:
+  - Look for "Current Invoice", "Total", "Balance Due", "Total Payable".
+  - Do not use "Subtotal" or "Tax" amounts.
+  - Format as a number (e.g., 1250.50), not a string. Remove '$' and commas.
 
-        3) invoice_date: prefer labels "Invoice Date", "Date of Issue", "Date", "Date de facture". Normalize to YYYY-MM-DD from formats like DD Mon YYYY, MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD. If multiple candidates conflict, choose the one closest to the invoice date label.
+- DATE:
+  - Prefer the "Invoice Date". Do not use "Due Date" unless Invoice Date is missing.
+  - Convert to YYYY-MM-DD (e.g., "Oct 10, 2023" -> "2023-10-10").
 
-        4) total_amount: prefer "Total", "Amount Due", "Balance Due" / "Total", "Montant dû", "Solde dû". Remove currency symbols and thousand separators; parse parentheses as negative; output a JSON number. Ignore "Subtotal", "Tax", "Paid to date".
+### INPUT TEXT (OCR FRAGMENTS)
+The following text contains the Header (top of page) and Footer (bottom of page) of the document.
 
-        OUTPUT:
-        • Return ONLY the JSON object with exactly the four keys. No explanations, no code fences, no trailing text.
+--- BEGIN HEADER ---
+{header_slice}
+--- END HEADER ---
 
-        Example output format:
-        {{
-        "invoice_number": "INV-2025-1234",
-        "company_name": "ACME Corporation",
-        "invoice_date": "2025-11-13",
-        "total_amount": 1234.56
-        }}
+... [middle content skipped] ...
 
-        Invoice OCR text (header + footer slice):
-        {header_slice}
+--- BEGIN FOOTER ---
+{footer_slice}
+--- END FOOTER ---
 
-        ...
-        {footer_slice}
+### OUTPUT
+Return ONLY the raw JSON object. Do not output markdown blocks (```json).
 
-        Return ONLY the JSON object.
-        """
+JSON:
+"""
 
 class SharePointConfig:
     """
