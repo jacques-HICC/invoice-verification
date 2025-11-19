@@ -128,8 +128,7 @@ class GCDocs:
 
         summary = (
             f" "
-            f"***************************************************"
-            f"Sync complete.\n"
+            f"***************************************************\n"
             f"  Total nodes:  {total}\n"
             f"  Created:      {created}\n"
             f"  Skipped:      {skipped} (already present)\n"
