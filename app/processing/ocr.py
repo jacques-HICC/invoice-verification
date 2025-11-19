@@ -24,7 +24,7 @@ def get_ocr_reader():
         _ocr_engine = PaddleOCR(
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
-            use_textline_orientation=False
+            use_textline_orientation=False,
         )
         print("✅ PaddleOCR initialized")
     return _ocr_engine
