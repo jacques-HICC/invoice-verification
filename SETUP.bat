@@ -4,24 +4,85 @@ echo  Invoice Extractor Setup
 echo ================================
 echo.
 
-REM Check if Python is installed
+REM Check if Python is installed (and not just the Microsoft Store stub)
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ERROR: Python is not installed or not in PATH
-    echo Please install Python 3.8+ and try again
+    echo Please install Python 3.8+ from the Company Portal and try again
     pause
     exit /b 1
+)
+
+REM Check if this is the Microsoft Store stub (it outputs nothing meaningful)
+python -c "print('OK')" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo ================================
+    echo  Microsoft Store Python Detected
+    echo ================================
+    echo The Microsoft Store version of Python may not work properly.
+    echo.
+    echo Please install Python from: https://www.python.org/downloads/
+    echo Make sure to check "Add Python to PATH" during installation
+    echo.
+    pause
+    exit /b 1
+)
+
+REM Detect Microsoft Store Python by checking the path
+for /f "tokens=*" %%i in ('python -c "import sys; print(sys.executable)"') do set PYTHON_PATH=%%i
+echo Python found at: %PYTHON_PATH%
+echo.
+
+echo %PYTHON_PATH% | findstr /i "WindowsApps" >nul
+if not errorlevel 1 (
+    echo.
+    echo ================================
+    echo  WARNING: Microsoft Store Python
+    echo ================================
+    echo You are using Python from the Microsoft Store.
+    echo This may cause issues with virtual environments.
+    echo.
+    echo RECOMMENDED: Install Python from python.org instead
+    echo Download: https://www.python.org/downloads/
+    echo.
+    set /p CONTINUE="Continue anyway? (y/N): "
+    if /i not "%CONTINUE%"=="y" (
+        echo Setup cancelled
+        pause
+        exit /b 1
+    )
+    echo.
+    echo Attempting setup with Store Python...
+    echo.
 )
 
 REM Create virtual environment
 echo [1/4] Creating virtual environment...
 if not exist "venv" (
-    python -m venv venv
+    python -m venv venv --without-pip
     if errorlevel 1 (
         echo ERROR: Failed to create virtual environment
+        echo.
+        echo If using Microsoft Store Python, please:
+        echo 1. Uninstall Microsoft Store Python
+        echo 2. Install from https://www.python.org/downloads/
+        echo 3. Check "Add Python to PATH" during installation
         pause
         exit /b 1
     )
+    
+    REM For Store Python, manually install pip
+    echo Installing pip in virtual environment...
+    call venv\Scripts\activate.bat
+    python -m ensurepip --default-pip >nul 2>&1
+    if errorlevel 1 (
+        echo Downloading get-pip.py...
+        powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile 'get-pip.py'}"
+        python get-pip.py
+        del get-pip.py
+    )
+    
     echo Virtual environment created successfully
 ) else (
     echo Virtual environment already exists, skipping...
@@ -37,6 +98,15 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
+
+REM Verify pip is available
+pip --version >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: pip is not available in the virtual environment
+    echo Try deleting the 'venv' folder and running setup.bat again
+    pause
+    exit /b 1
+)
 
 REM Install requirements
 echo [3/4] Installing requirements...
