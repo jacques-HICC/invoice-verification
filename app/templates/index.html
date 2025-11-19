@@ -52,17 +52,10 @@
         <section class="validation-section">
             <div class="invoice-preview">
                 <div class="preview-header">
-                    <div class="page-navigation" id="page-navigation" style="display: none;">
-                        <button id="prev-page-btn" onclick="previousPage()">◀ Previous</button>
-                        <span class="page-info">
-                            Page <span id="current-page">1</span> of <span id="total-pages">1</span>
-                        </span>
-                        <button id="next-page-btn" onclick="nextPage()">Next ▶</button>
-                    </div>
                     <h2>Invoice Preview</h2>
                     <div class="preview-actions">
                         <button class="refresh-btn" onclick="openInGCDocs()" id="gcdocs-btn" style="display: none;">
-                            🔗 Display Full Invoice
+                            🔗 Display Full Invoice (<span id="total-pages">1</span> pages)
                         </button>
                         <button class="refresh-btn" onclick="refreshInvoice()" id="refresh-btn">
                             🔄 Refresh

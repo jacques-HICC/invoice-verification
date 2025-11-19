@@ -272,17 +272,17 @@ def get_invoice_image(node_id, page=0):
             if not os.path.exists(pdf_path):
                 return jsonify({'error': 'PDF download failed'}), 500
         
-        # 3) Convert PDF to images (this will use cached images if they exist)
-        image_paths = pdf_to_images(pdf_path, output_folder=temp_dir)
+        # 3) Convert only first page of PDF to image
+        image_paths = pdf_to_images(pdf_path, output_folder=temp_dir, max_pages=1)
         if not image_paths:
             return jsonify({'error': 'Failed to render PDF as image'}), 500
         
-        # 4) Validate page number
-        if page < 0 or page >= len(image_paths):
-            return jsonify({'error': f'Invalid page number. Document has {len(image_paths)} pages.'}), 400
+        # 4) Only serve the first page (page 0)
+        if page != 0:
+            return jsonify({'error': 'Only first page is available'}), 400
         
-        # 5) Serve the requested page
-        return send_file(image_paths[page], mimetype='image/jpeg')
+        # 5) Serve the first page
+        return send_file(image_paths[0], mimetype='image/jpeg')
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

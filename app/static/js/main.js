@@ -347,7 +347,6 @@ async function loadInvoicePage(nodeId, page) {
         document.getElementById('invoice-display').appendChild(img);
         
         currentPage = page;
-        updatePageNavigation();
         
     } catch (err) {
         console.error('Error loading page:', err);
@@ -368,7 +367,6 @@ async function loadNextInvoice() {
                     document.getElementById('invoice-display').innerHTML = 
                         '<div class="no-invoices">🎉 No invoices to validate! All done.</div>';
                 }
-                document.getElementById('page-navigation').style.display = 'none';
                 document.getElementById('gcdocs-btn').style.display = 'none';
                 disableForm();
                 return;
@@ -387,11 +385,8 @@ async function loadNextInvoice() {
         const pageCountData = await pageCountResponse.json();
         totalPages = pageCountData.page_count || 1;
         
-        // ALWAYS show page navigation and update total pages
-        const pageNav = document.getElementById('page-navigation');
-        pageNav.style.display = 'flex';
+        // Update total pages in button
         document.getElementById('total-pages').textContent = totalPages;
-        document.getElementById('current-page').textContent = '1';
         
         // Load first page
         await loadInvoicePage(currentInvoice.node_id, 0);
@@ -423,24 +418,6 @@ async function refreshInvoice() {
     await loadNextInvoice();
     
     refreshBtn.textContent = originalText;
-}
-
-function previousPage() {
-    if (currentPage > 0 && currentInvoice) {
-        loadInvoicePage(currentInvoice.node_id, currentPage - 1);
-    }
-}
-
-function nextPage() {
-    if (currentPage < totalPages - 1 && currentInvoice) {
-        loadInvoicePage(currentInvoice.node_id, currentPage + 1);
-    }
-}
-
-function updatePageNavigation() {
-    document.getElementById('current-page').textContent = currentPage + 1;
-    document.getElementById('prev-page-btn').disabled = currentPage === 0;
-    document.getElementById('next-page-btn').disabled = currentPage >= totalPages - 1;
 }
 
 async function saveAndNext() {

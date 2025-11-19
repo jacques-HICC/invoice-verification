@@ -9,11 +9,10 @@
 - ~~Delete stuff from /temp on app startup~~
 - Delete jpg files from /temp on save&next
 - Make gcdocs folder changeable in the UI
-- Make n_ctx a variable in the interface as well (maybe low ram, medium and high settings)
 - Skip button for previewer to skip an invoice
 - ~~Gcdocs link button for previewer~~
 - Keyboard shortcuts for validation workflow
-- Overlay preview section for loading
+- Overlay preview section for loading after save & next and refresh
 - Some function for "not an invoice" in previewer.. Maybe tie this to additional SharePoint field so we ignore it in training and subsequent runs
 - Make mock console logs cooler looking
 - ~~Make mock console scrollable~~
@@ -22,7 +21,7 @@
 - Log ocr text to gcdocs training folder
 - ~~Swap to paddleOCR~~
 - Include few-shot examples in prompt (fictitious data, obfuscated because it will be in devops/git repo)
-- Keep model in memory (don't reinitialize it every run)
+- ~~Keep model in memory (don't reinitialize it every run)~~
 - Resizing the mock console seems broken
 - ~~Killswitch for AI processing~~
 - ~~move css outside index.html~~
