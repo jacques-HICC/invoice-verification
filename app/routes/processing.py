@@ -5,7 +5,7 @@ import time
 
 processing_bp = Blueprint('processing', __name__)
 
-from app.processing.ocr import perform_ocr
+from app.processing.ocr import perform_ocr, wait_for_background_ocr
 from config import OCRConfig
 
 @processing_bp.route('/process_with_ai', methods=['POST'])
@@ -55,7 +55,7 @@ def process_with_ai():
                 
                 yield f"data: \n[{i}/{len(unprocessed)}] {filename}\n\n"
                 
-                pdf_to_cleanup = None  # Track if we need to delete converted PDF
+                pdf_to_cleanup = None
                 
                 try:
                     # Download from GCDocs
@@ -65,11 +65,9 @@ def process_with_ai():
                     temp_dir = os.path.join(os.getcwd(), "temp")
                     os.makedirs(temp_dir, exist_ok=True)
 
-                    # Get file extension from filename
                     file_ext = os.path.splitext(filename)[1].lower()
                     download_path = os.path.join(temp_dir, f"invoice_{node_id}{file_ext}")
                     
-                    # Download file
                     gcdocs_global.download_file(node_id=node_id, save_path=download_path)
                     download_time = time.time() - download_start
                     yield f"data:     ✓ File downloaded ({download_time:.1f}s)\n\n"
@@ -82,37 +80,64 @@ def process_with_ai():
                         convert_time = time.time() - convert_start
                         yield f"data:     ✓ Converted to PDF ({convert_time:.1f}s)\n\n"
                         
-                        # Delete original non-PDF file
                         os.remove(download_path)
                         pdf_to_cleanup = pdf_path
                     else:
                         pdf_path = download_path
                         pdf_to_cleanup = download_path
                     
-                    yield f"data:    👀 Accessing invoice text (Node: {node_id})\n\n"
-                    # OCR - NOW RETURNS A DICT
+                    # ================================================================
+                    # OPTIMIZED OCR: Page 1 immediately, rest in background
+                    # ================================================================
+                    yield f"data:     👀 Reading page 1 (rest processing in background)...\n\n"
                     ocr_start = time.time()
-                    ocr_result = perform_ocr(pdf_path, max_pages=OCRConfig.MAX_OCR_PAGES)
-                    ocr_time = time.time() - ocr_start
                     
-                    # Get text length from the dict result
-                    if isinstance(ocr_result, dict):
-                        text_length = len(ocr_result.get('full_text', ''))
-                        ocr_method = ocr_result.get('method', 'unknown')
-                        yield f"data:     ✓ OCR complete via {ocr_method} ({ocr_time:.1f}s, {text_length} chars)\n\n"
-                    else:
-                        # Backward compatibility
-                        text_length = len(ocr_result)
-                        yield f"data:     ✓ OCR complete ({ocr_time:.1f}s, {text_length} chars)\n\n"
-
-                    # Extract with LLM - Pass the dict result
+                    # This returns IMMEDIATELY with page 1 data
+                    ocr_result = perform_ocr(pdf_path, max_pages=OCRConfig.MAX_OCR_PAGES)
+                    
+                    ocr_time = time.time() - ocr_start
+                    text_length = len(ocr_result.get('full_text', ''))
+                    ocr_method = ocr_result.get('method', 'unknown')
+                    total_pages = ocr_result.get('total_pages', 1)
+                    
+                    yield f"data:     ✓ Page 1 ready ({ocr_time:.1f}s, {text_length} chars)\n\n"
+                    
+                    if total_pages > 1:
+                        yield f"data:     🔄 Pages 2-{total_pages} processing in background...\n\n"
+                    
+                    # ================================================================
+                    # LLM EXTRACTION: Starts immediately with page 1 data
+                    # ================================================================
                     extraction_start = time.time()
-                    yield f"data:     🤖 Extracting data from invoice text with AI...(Node: {node_id})\n\n"
+                    yield f"data:     🤖 AI analyzing invoice (using page 1)...\n\n"
+                    
                     extracted = extractor.extract_invoice_data(ocr_result)
+                    
                     extraction_time = time.time() - extraction_start
                     yield f"data:     ✓ AI extraction complete ({extraction_time:.1f}s)\n\n"
+                    
+                    # ================================================================
+                    # WAIT FOR BACKGROUND OCR (for complete SharePoint storage)
+                    # ================================================================
+                    if not ocr_result.get('background_complete', False):
+                        yield f"data:     ⏳ Finalizing background OCR...\n\n"
+                        wait_start = time.time()
+                        
+                        ocr_result = wait_for_background_ocr(ocr_result, timeout=30.0)
+                        
+                        wait_time = time.time() - wait_start
+                        
+                        if ocr_result.get('background_complete'):
+                            final_text_length = len(ocr_result.get('full_text', ''))
+                            yield f"data:     ✓ All {total_pages} pages complete ({wait_time:.1f}s, {final_text_length} total chars)\n\n"
+                        else:
+                            yield f"data:     ⚠️ Background OCR timeout (proceeding with page 1 data)\n\n"
+                    
                     total_time = time.time() - invoice_start_time
-                    # Update SharePoint
+                    
+                    # ================================================================
+                    # UPDATE SHAREPOINT with complete results
+                    # ================================================================
                     yield f"data:     💾 Updating SharePoint...\n\n"
                     sp_tracker_global.create_or_update_item(
                         node_id=int(node_id),
@@ -127,7 +152,9 @@ def process_with_ai():
                             'ai_processed': True,
                             'ocr_method': extracted.get('ocr_method', 'unknown'),
                             'llm_used': extracted.get('model_used', model_filename),
-                            'time_taken': extracted.get('time_taken', total_time)
+                            'time_taken': total_time,
+                            'pages_processed': ocr_result.get('total_pages', 1),
+                            'ocr_chars': len(ocr_result.get('full_text', ''))
                         }
                     )
 
@@ -135,8 +162,7 @@ def process_with_ai():
                     if pdf_to_cleanup and os.path.exists(pdf_to_cleanup):
                         os.remove(pdf_to_cleanup)
                     
-                    total_time = time.time() - invoice_start_time
-                    yield f"data:     ✅ Complete in {total_time:.1f}s\n\n"
+                    yield f"data:     ✅ Complete in {total_time:.1f}s (OCR: {ocr_time:.1f}s, AI: {extraction_time:.1f}s)\n\n"
 
                 except Exception as e:
                     import traceback
