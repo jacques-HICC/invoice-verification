@@ -179,6 +179,6 @@ echo ================================
 echo  Setup Complete!
 echo ================================
 echo.
-echo To run the application, use: run.bat
+echo To run the application, use: START_APP.bat
 echo.
 pause
