@@ -2,9 +2,6 @@
 
 ## Prerequisites
 
-- **Download Mistral7b** and place it in the `models` folder:  
-  `https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf`
-
 - **Access to example GCDocs folder**:  
   `https://gcdocs.gc.ca/infc/llisapi.dll/app/nodes/32495273`
 
@@ -36,6 +33,9 @@ The application expects a SharePoint list with the following **columns and data 
 | AI_InvoiceDate | Single line of text |
 | GCDocsURL | Single line of text |
 | NodeID | Single line of text |
+| OCR_Method | Single line of text |
+| LLM_Used | Single line of text |
+| Time_Taken | Single line of text |
 
 > Make sure the **data types match** exactly (e.g., Currency fields for totals, Number for confidence) for correct integration.
 
@@ -98,26 +98,13 @@ class GCDocsConfig:
 
 ## Running the application
 
-1. **Create and activate a virtual environment**:
+1. **Install Python from the Company Portal**
 
-    ```bash
-    python -m venv venv
-    venv\Scripts\activate
-    ```
+2. **Double click on SETUP.bat for first time setup**
 
-2. **Install required Python packages**:
+2. **Double click on START_APP.bat to launch the application**
 
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3. **Start the application**:
-
-    ```bash
-    python app.py
-    ```
-
-    Enter your credentials when prompted (for both GCDocs and SharePoint) and wait for the app to launch.
+    You will be prompted to authenticate into Azure (browser-based auth) and GCDocs (credentials-based auth).
 
 ---
 
@@ -126,14 +113,14 @@ class GCDocsConfig:
 ### Workflow
 
 1. **Startup**: App connects to GCDocs and SharePoint.  
-2. **Process Invoices**: Downloads unprocessed PDFs from GCDocs.  
-3. **AI Extraction**: Extracts invoice data, updates SharePoint `AI_*` fields.  
-4. **Human Validation**: User reviews/corrects, updates SharePoint `Human_*` fields.
+2. **Scan for new invoices**: Finds and adds invoices from the target GCDocs folder to the SharePoint list.  
+3. **Process with AI**: Extracts invoice data which updates SharePoint `AI_*` fields.  
+4. **Invoice Preview / Human Validation**: User reviews/corrects which updates SharePoint `Human_*` fields.
 
 ### Notes
 
 - All AI extraction and human validation data is automatically pushed to the SharePoint list.  
-- Config variables in `config.py` let you tweak AI parameters, file paths, OCR settings, and SharePoint integration.  
+- Config variables in `config.py` let you tweak AI prompt, parameters, file paths, OCR settings, and SharePoint integration.  
 - SharePoint list **must exist with the expected columns and types** for the application to work correctly.  
 
 ---

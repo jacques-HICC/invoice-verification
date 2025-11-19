@@ -24,14 +24,11 @@ class LLMExtractor:
         self.model_name = model_filename
 
         print(f"Loading model from: {model_path}")
-        # OPTIMIZATION 1: n_batch=1024
-        # This allows the CPU to digest the prompt in larger chunks, 
-        # significantly speeding up the 'reading' phase.
         self.llm = Llama(
             model_path=str(model_path),
             n_ctx=n_ctx,
-            n_batch=1024,  # <--- FASTER PROMPT PROCESSING
-            n_threads=4,   # Ensure this matches your physical cores
+            n_batch=1024,  # Fast prompt processing
+            n_threads=4,
             n_gpu_layers=0,
             verbose=False
         )
@@ -46,7 +43,7 @@ class LLMExtractor:
             return None
 
     def _clean_ocr_text(self, text: str) -> str:
-        """Compress whitespace to save tokens and speed up inference"""
+        """Compress whitespace to save tokens"""
         if not text: return ""
         # Replace 3+ newlines with 2
         text = re.sub(r'\n{3,}', '\n\n', text)
@@ -70,32 +67,26 @@ class LLMExtractor:
         if not ocr_text or len(ocr_text.strip()) < 10:
             return self._return_empty_error(ocr_method, "No text content in OCR result")
 
-        # OPTIMIZATION 2: Token Saving
-        # Clean the text to remove useless whitespace before slicing
+        # Clean the text
         ocr_text = self._clean_ocr_text(ocr_text)
         total_len = len(ocr_text)
 
-        # OPTIMIZATION 3: Intelligent Slicing
-        # Header: 1000 chars is enough for address/logo/invoice#
-        # Footer: 400 chars is enough for Totals. 
-        # Logic ensures we don't duplicate text if the invoice is short.
+        print(f"📊 Using full page text: {total_len} chars")
         
-        header_size = 1000
-        footer_size = 400
-        
-        if total_len <= (header_size + footer_size):
-            # If text is short, just send the whole thing
-            header_slice = ocr_text
-            footer_slice = ""
+        # Check if text exceeds maximum page size
+        if total_len > AIConfig.MAX_PAGE_CHARS:
+            print(f"⚠️ Text exceeds {AIConfig.MAX_PAGE_CHARS} chars, using smart slicing fallback")
+            # Fallback to header+footer if page is abnormally large
+            header_slice = ocr_text[:AIConfig.HEADER_SIZE]
+            footer_slice = ocr_text[-AIConfig.FOOTER_SIZE:]
+            
+            prompt = AIConfig.INVOICE_EXTRACTION_PROMPT.format(
+                header_slice=header_slice,
+                footer_slice=footer_slice
+            )
         else:
-            header_slice = ocr_text[:header_size]
-            footer_slice = ocr_text[-footer_size:]
-
-        # Build Prompt
-        prompt = AIConfig.INVOICE_EXTRACTION_PROMPT.format(
-            header_slice=header_slice,
-            footer_slice=footer_slice
-        )
+            # Use FULL page text directly from config
+            prompt = AIConfig.INVOICE_EXTRACTION_PROMPT_FULL_PAGE.format(full_text=ocr_text)
 
         # Debug save
         try:
@@ -103,24 +94,22 @@ class LLMExtractor:
             debug_path.mkdir(parents=True, exist_ok=True)
             with open(debug_path / "prompt.txt", "w", encoding="utf-8") as f:
                 f.write(prompt)
-        except: pass
+        except: 
+            pass
 
         print(f"📤 Sending prompt to LLM ({len(prompt)} chars)")
 
         try:
-            # OPTIMIZATION 4: Aggressive Stopping
-            # We add "}" to the stop list. This kills the generation 
-            # the MICROSECOND the JSON object is closed.
             response = self.llm(
                 prompt,
                 max_tokens=AIConfig.MAX_TOKENS,
                 temperature=AIConfig.TEMPERATURE,
-                stop=["\n\n\n", "```", "}"], # <--- Stop exactly at end of JSON
+                stop=["\n\n\n", "```", "}"],  # Stop at JSON closing brace
                 echo=False
             )
             output_text = response['choices'][0]['text'].strip()
             
-            # If we stopped at '}', we need to add it back for valid JSON parsing
+            # If we stopped at '}', add it back for valid JSON
             if not output_text.endswith("}"):
                 output_text += "}"
 
@@ -143,7 +132,7 @@ class LLMExtractor:
             # Sanitize Amount
             try:
                 raw_amount = str(data.get('total_amount', 0))
-                clean_amount = re.sub(r'[^\d.-]', '', raw_amount) # Regex remove non-numeric
+                clean_amount = re.sub(r'[^\d.-]', '', raw_amount)
                 data['total_amount'] = float(clean_amount)
             except:
                 data['total_amount'] = 0.0
@@ -165,7 +154,12 @@ class LLMExtractor:
 
     def _return_empty_error(self, method, error_msg):
         return {
-            "invoice_number": "", "company_name": "", "invoice_date": None,
-            "total_amount": 0.0, "confidence": 0.0, "model_used": self.model_name,
-            "ocr_method": method, "error": error_msg
+            "invoice_number": "", 
+            "company_name": "", 
+            "invoice_date": None,
+            "total_amount": 0.0, 
+            "confidence": 0.0, 
+            "model_used": self.model_name,
+            "ocr_method": method, 
+            "error": error_msg
         }
