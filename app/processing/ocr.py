@@ -172,7 +172,7 @@ def perform_ocr(pdf_path: str, preprocess: bool = True, max_pages: int = None) -
                 print(f"⚡ Returning page 1 immediately while background processes rest...")
             else:
                 ocr_results["background_complete"] = True
-                print(f"ℹ️ Single page document - no background processing needed")
+                print(f"ℹ️ No background processing needed")
             
             return ocr_results
 
