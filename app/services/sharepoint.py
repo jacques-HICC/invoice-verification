@@ -21,6 +21,10 @@ class SharePointTracker:
         self.site_id = None
         self.list_id = None
         
+        # Cache State
+        self.items_cache = None  # Stores all items from SharePoint
+        self.filter_works = True  # Whether OData filtering is supported
+        
         # --- NETWORK SETUP ---
         self.session = requests.Session()
         
@@ -83,8 +87,14 @@ class SharePointTracker:
             raise ValueError(f"List '{self.list_name}' not found on site '{self.site_name}'")
         print(f"✓ Connected to SharePoint List: {self.list_name}")
 
+    def refresh_cache(self):
+        """Download all items once and cache them for fast lookups"""
+        print("📥 Downloading all SharePoint items...")
+        self.items_cache = self.get_all_items()
+        print(f"✓ Cached {len(self.items_cache)} items")
+
     def get_all_items(self) -> List[Dict]:
-        """Fallback method: downloads everything. Use sparingly."""
+        """Downloads everything from SharePoint list"""
         self._ensure_valid_token()
         url = f"{GRAPH_BASE_URL}/sites/{self.site_id}/lists/{self.list_id}/items?expand=fields"
         r = self.session.get(url, timeout=60)
@@ -94,45 +104,52 @@ class SharePointTracker:
 
     def get_item_by_node_id(self, node_id: int) -> Optional[Dict]:
         """
-        Optimized lookup using OData Filter.
-        Instead of downloading the whole list, asks specifically for this NodeID.
+        Optimized lookup - tries cache first, then filter, then full scan.
         """
         self._ensure_valid_token()
         node_id_str = str(node_id)
 
-        # OPTIMIZATION: Try filtering server-side first
-        # Syntax: items?expand=fields&$filter=fields/NodeID eq '12345'
-        try:
-            filter_url = (
-                f"{GRAPH_BASE_URL}/sites/{self.site_id}/lists/{self.list_id}/items"
-                f"?expand=fields&$filter=fields/NodeID eq '{node_id_str}'"
-            )
-            r = self.session.get(filter_url, timeout=20)
-            
-            # If 400 Bad Request, it likely means the column isn't indexed.
-            # In that case, we catch the error and fall back to the slow method.
-            if r.status_code == 400:
-                raise Exception("Column not indexed")
-                
-            r.raise_for_status()
-            data = r.json()
-            
-            if data.get("value"):
-                # Item found!
-                return data["value"][0]["fields"]
-            else:
-                # Item not found (list is empty for this filter)
-                return None
-
-        except Exception as e:
-            # FALLBACK: If filtering fails (e.g. NodeID not indexed in SharePoint),
-            # we must do the slow crawl.
-            # print(f"⚠️ Filter lookup failed ({e}). Falling back to full list scan...")
-            all_items = self.get_all_items()
-            for item in all_items:
+        # FAST PATH: Use cache if available
+        if self.items_cache is not None:
+            for item in self.items_cache:
                 if str(item.get("NodeID")) == node_id_str:
                     return item
             return None
+
+        # MEDIUM PATH: Try OData filter if it works
+        if self.filter_works:
+            try:
+                filter_url = (
+                    f"{GRAPH_BASE_URL}/sites/{self.site_id}/lists/{self.list_id}/items"
+                    f"?expand=fields&$filter=fields/NodeID eq '{node_id_str}'"
+                )
+                r = self.session.get(filter_url, timeout=20)
+                
+                if r.status_code == 400:
+                    print("⚠️ Column filtering not supported. Disabling for future lookups...")
+                    self.filter_works = False
+                    raise Exception("Column not indexed")
+                    
+                r.raise_for_status()
+                data = r.json()
+                
+                if data.get("value"):
+                    return data["value"][0]["fields"]
+                else:
+                    return None
+
+            except Exception as e:
+                if self.filter_works:
+                    print(f"⚠️ Filter lookup failed ({e}). Switching to full scan mode...")
+                    self.filter_works = False
+
+        # SLOW PATH: Full list scan
+        print(f"⚠️ Doing full list scan for NodeID {node_id}...")
+        all_items = self.get_all_items()
+        for item in all_items:
+            if str(item.get("NodeID")) == node_id_str:
+                return item
+        return None
 
     def create_or_update_item(self, node_id: int, filename: str, gcdocs_url: str, metadata: Dict = None):
         self._ensure_valid_token()
@@ -161,7 +178,7 @@ class SharePointTracker:
             "AI_Confidence": clean_float(metadata.get("ai_confidence", 0)),
             "OCR_Method": metadata.get("ocr_method", ""),
             "LLM_Used": metadata.get("llm_used", ""),
-            "Time_Taken": clean_float(metadata.get("time_taken", 0)),
+            "Time_Taken": metadata.get("time_taken", ""),
             "Human_InvoiceNumber": metadata.get("human_invoice_number", ""),
             "Human_InvoiceDate": metadata.get("human_invoice_date", ""),
             "Human_CompanyName": metadata.get("human_company_name", ""),
@@ -182,12 +199,23 @@ class SharePointTracker:
                 r = self.session.patch(url, json=fields, timeout=30)
                 r.raise_for_status()
                 print(f"✓ Updated SharePoint item for NodeID {node_id}")
+                
+                # Update cache if it exists
+                if self.items_cache is not None:
+                    for i, item in enumerate(self.items_cache):
+                        if str(item.get("NodeID")) == str(node_id):
+                            self.items_cache[i] = fields
+                            break
             else:
                 # Create
                 url = f"{GRAPH_BASE_URL}/sites/{self.site_id}/lists/{self.list_id}/items"
                 r = self.session.post(url, json={"fields": fields}, timeout=30)
                 r.raise_for_status()
                 print(f"✓ Created SharePoint item for NodeID {node_id}")
+                
+                # Add to cache if it exists
+                if self.items_cache is not None:
+                    self.items_cache.append(fields)
                 
         except requests.exceptions.RetryError:
             print(f"❌ Max retries exceeded for NodeID {node_id}. Network is unstable.")
