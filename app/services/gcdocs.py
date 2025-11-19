@@ -133,8 +133,9 @@ class GCDocs:
             f"  Total nodes:  {total}\n"
             f"  Created:      {created}\n"
             f"  Skipped:      {skipped} (already present)\n"
-            f"  Errors:       {errors}"
+            f"  Errors:       {errors}\n"
             f"***************************************************"
+            f" "
         )
 
         if stream:
