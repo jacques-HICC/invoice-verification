@@ -43,56 +43,126 @@ The application expects a SharePoint list with the following **columns and data 
 
 # Configuration (`config.py`) overview
 ```bash
-# AI model parameters
 class AIConfig:
-    """
-    Configuration for AI model parameters.
-    Controls context size, generation settings, model path, and prompt templates.
-    """
-    CTX_SIZE = 2048             # Context window size (max tokens the model can see at once)
-    TEMPERATURE = 0.1           # Sampling temperature (higher = more creative/random)
-    MAX_TOKENS = 1000           # Max tokens to generate per response
-    MODEL_PATH = "models/mistral-7b.gguf"  # Path to the model file
+    # Model Configuration
+    MODEL_PATH = "mistral-7b.gguf"  # Your model filename
+    CTX_SIZE = 8192  # Context window size
+    MAX_TOKENS = 200  # Max tokens for extraction response
+    TEMPERATURE = 0.1  # Low temperature for deterministic extraction
+    
+    # Text Slicing Configuration
+    MAX_PAGE_CHARS = 8000  # Maximum characters before falling back to header+footer
+    HEADER_SIZE = 2000  # Characters to take from start of document
+    FOOTER_SIZE = 1000  # Characters to take from end of document
+    
+    # ==========================================================================
+    # FULL PAGE PROMPT (Used when page 1 text < MAX_PAGE_CHARS)
+    # ==========================================================================
+    INVOICE_EXTRACTION_PROMPT_FULL_PAGE = """### SYSTEM INSTRUCTIONS
+You are a specialized data extraction AI. Your task is to read the provided invoice text and extract structured data into a valid JSON object.
 
-    # Default prompt for invoice extraction
-    INVOICE_EXTRACTION_PROMPT = """
-        You are an information extraction model. Extract invoice fields from OCR text and return a STRICT JSON object with EXACTLY these keys:
+### TARGET SCHEMA
+Return a JSON object with EXACTLY these four keys:
+1. "invoice_number": (string) The unique invoice identifier (e.g., "INV-001").
+2. "company_name": (string) The name of the VENDOR/SUPPLIER (the entity getting paid).
+3. "invoice_date": (string) The date of issue in format YYYY-MM-DD.
+4. "total_amount": (float) The final numeric amount due.
 
-        - "invoice_number" (string)
-        - "company_name" (string)
-        - "invoice_date" (string, format YYYY-MM-DD)
-        - "total_amount" (number, no currency symbols or commas)
+### CRITICAL EXTRACTION RULES
+- COMPANY NAME:
+  - You must extract the VENDOR name, usually found at the top left or in a logo.
+  - IGNORE the "Bill To" or "Client" name.
+  - NEGATIVE CONSTRAINT: The company is NOT "Toronto Waterfront Revitalization Corporation", "Waterfront Toronto", "TWRC", or "Waterfront". These are the clients. Look for the OTHER company name.
 
-        [Prompt continues...]
-    """
-# SharePoint integration
+- TOTAL AMOUNT:
+  - Look for "Current Invoice", "Total", "Balance Due", "Total Payable".
+  - Do not use "Subtotal" or "Tax" amounts.
+  - Format as a number (e.g., 1250.50), not a string. Remove '$' and commas.
+
+- DATE:
+  - Prefer the "Invoice Date". Do not use "Due Date" unless Invoice Date is missing.
+  - Convert to YYYY-MM-DD (e.g., "Oct 10, 2023" -> "2023-10-10").
+
+### INPUT TEXT (FULL PAGE 1)
+The following text contains the complete first page of the invoice document.
+
+--- BEGIN INVOICE PAGE 1 ---
+{full_text}
+--- END INVOICE PAGE 1 ---
+
+### OUTPUT
+Return ONLY the raw JSON object. Do not output markdown blocks (```json).
+
+JSON:
+"""
+
+    # ==========================================================================
+    # HEADER+FOOTER PROMPT (Fallback for abnormally large pages > MAX_PAGE_CHARS)
+    # ==========================================================================
+    INVOICE_EXTRACTION_PROMPT = """### SYSTEM INSTRUCTIONS
+You are a specialized data extraction AI. Your task is to read the provided invoice text segments and extract structured data into a valid JSON object.
+
+### TARGET SCHEMA
+Return a JSON object with EXACTLY these four keys:
+1. "invoice_number": (string) The unique invoice identifier (e.g., "INV-001").
+2. "company_name": (string) The name of the VENDOR/SUPPLIER (the entity getting paid).
+3. "invoice_date": (string) The date of issue in format YYYY-MM-DD.
+4. "total_amount": (float) The final numeric amount due.
+
+### CRITICAL EXTRACTION RULES
+- COMPANY NAME:
+  - You must extract the VENDOR name, usually found at the top left or in a logo.
+  - IGNORE the "Bill To" or "Client" name.
+  - NEGATIVE CONSTRAINT: The company is NOT "Toronto Waterfront Revitalization Corporation", "Waterfront Toronto", "TWRC", or "Waterfront". These are the clients. Look for the OTHER company name.
+
+- TOTAL AMOUNT:
+  - Look for "Current Invoice", "Total", "Balance Due", "Total Payable".
+  - Do not use "Subtotal" or "Tax" amounts.
+  - Format as a number (e.g., 1250.50), not a string. Remove '$' and commas.
+
+- DATE:
+  - Prefer the "Invoice Date". Do not use "Due Date" unless Invoice Date is missing.
+  - Convert to YYYY-MM-DD (e.g., "Oct 10, 2023" -> "2023-10-10").
+
+### INPUT TEXT (OCR FRAGMENTS)
+The following text contains the Header (top of page) and Footer (bottom of page) of the document.
+
+--- BEGIN HEADER ---
+{header_slice}
+--- END HEADER ---
+
+... [middle content skipped] ...
+
+--- BEGIN FOOTER ---
+{footer_slice}
+--- END FOOTER ---
+
+### OUTPUT
+Return ONLY the raw JSON object. Do not output markdown blocks (```json).
+
+JSON:
+"""
+
+
 class SharePointConfig:
+    """
+    Configuration for SharePoint integration.
+    """
     SP_SITE_NAME = "DataScience"                     # SharePoint site name
     SP_LIST_NAME = "invoiceverificationtestlist"     # List to interact with
     TENANT_NAME = "142gc.sharepoint.com"            # Tenant / domain
 
-# OCR settings
+
 class OCRConfig:
-    # DPI settings for PDF rendering
-    DEFAULT_DPI = 300
-    DPI_OPTIONS = [150, 300, 600]  # Fast, Normal, High Quality
-
-    # EasyOCR settings
-    DEFAULT_LANGUAGE = "en"      # EasyOCR uses 'en' not 'eng'
-    USE_GPU = False              # Set to True if you have CUDA-capable GPU
-    OCR_VERBOSE = False          # Set to True for debug output
-
-    # Image preprocessing
-    PREPROCESS_CONTRAST = 2.0   # Contrast enhancement factor
-    PREPROCESS_SHARPEN = True   # Apply sharpening filter
-
     # Maximum pages that will be OCR'd per invoice
-    MAX_OCR_PAGES = 5
+    MAX_OCR_PAGES = 1
 
-# GCDocs integration
+
 class GCDocsConfig:
+    """
+    Configuration for GCDocs integration.
+    """
     INVOICES_FOLDER_NODE = 32495273  # Node ID of the invoices folder in GCDocs
-
 ```
 ---
 
