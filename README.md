@@ -100,9 +100,14 @@ class GCDocsConfig:
 
 1. **Install Python from the Company Portal**
 
-2. **Double click on SETUP.bat for first time setup**
+2. **Clone this repository onto your system by navigating to the target directory in cmd and using:**
+    ```bash
+    git clone https://INFC-Hub@dev.azure.com/INFC-Hub/Data%20Science/_git/invoice-verification
+    ```
 
-2. **Double click on START_APP.bat to launch the application**
+3. **Double click on SETUP.bat for first time setup**
+
+4. **Double click on START_APP.bat to launch the application**
 
     You will be prompted to authenticate into Azure (browser-based auth) and GCDocs (credentials-based auth).
 
