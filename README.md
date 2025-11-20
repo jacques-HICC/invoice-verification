@@ -1,6 +1,6 @@
 # Invoice Verification & Extraction
 
-This project is a Python/Flask application designed to streamline invoice processing by combining OCR with AI-assisted data extraction. It automates the extraction of key invoice fields and tracks validation status while integrating with SharePoint for centralized record management.
+This project is a Python/Flask application designed to streamline invoice processing by combining OCR with AI-assisted data extraction. It automates the extraction of key invoice fields and tracks validation status while integrating with GCDocs for finding invoices and SharePoint for record management.
 
 ## Key Features
 
