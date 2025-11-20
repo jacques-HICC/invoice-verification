@@ -1,4 +1,21 @@
-# Invoice Verification Setup Guide
+# Invoice Verification & Extraction
+
+This project is a Python/Flask application designed to streamline invoice processing by combining OCR with AI-assisted data extraction. It automates the extraction of key invoice fields and tracks validation status while integrating with SharePoint for centralized record management.
+
+## Key Features
+
+- OCR-based invoice reading: Uses PaddleOCR to extract text from the first page of invoices.
+- AI-assisted extraction: Sends invoice text to a local LLM to reliably extract structured data
+  - Invoice number
+  - Vendor/company name
+  - Invoice date
+  - Total amount
+- Human-in-the-loop validation: Users can review AI-extracted data and mark invoices as valid, “not an invoice,” or needing splitting.
+- SharePoint integration: Automatically updates a SharePoint list with AI results and validation status.
+- Flexible file sourcing: Supports invoices stored in OpenText nodes and can handle multiple formats.
+- Local-first processing: Optimized for CPU-only environments to avoid heavy cloud dependency.
+
+# Setup Guide
 
 ## Prerequisites
 
