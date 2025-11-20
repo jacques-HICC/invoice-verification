@@ -13,7 +13,6 @@
 - ~~Gcdocs link button for previewer~~
 - Keyboard shortcuts for validation workflow
 - Overlay preview section for loading after save & next and refresh
-- Some function for "not an invoice" in previewer.. Maybe tie this to additional SharePoint field so we ignore it in training and subsequent runs
 - Make mock console logs cooler looking
 - ~~Make mock console scrollable~~
 - Make button to go to sharepoint list
@@ -28,3 +27,10 @@
 - ~~move scripts outside index.html~~
 - ~~Killswitch for AI processing~~
 - ~~Killswitch not preserving state on save + next~~
+- "Status" column on SP List instead of multiple columns:
+    - Pending
+    - AI Processed
+    - Human Validated
+    - Not an Invoice
+    - Needs Splitting
+    - Error

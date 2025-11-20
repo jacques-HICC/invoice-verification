@@ -172,7 +172,12 @@ class GCDocsConfig:
 
 2. **Clone this repository onto your system by navigating to the target directory in cmd and using:**
     ```bash
+    DevOps:
     git clone https://INFC-Hub@dev.azure.com/INFC-Hub/Data%20Science/_git/invoice-verification
+    ```
+    ```bash
+    GitHub:
+    git clone https://github.com/jacques-HICC/invoice-verification.git
     ```
 
 3. **Double click on SETUP.bat for first time setup**
