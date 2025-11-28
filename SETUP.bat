@@ -129,49 +129,67 @@ echo [3/5] Upgrading pip...
 pip install --upgrade pip
 echo.
 
-REM Install llama-cpp-python with prebuilt wheel FIRST (before requirements.txt)
-echo [4/5] Installing llama-cpp-python...
-echo Detected Python %PYTHON_VERSION%
+REM Install llama-cpp-python with PREBUILT CPU wheel (NO COMPILATION NEEDED)
+echo [4/5] Installing llama-cpp-python (CPU version)...
+echo This will download a prebuilt wheel - no compilation required!
+echo.
 
-REM For Python 3.12+, we need to use a different approach
-if %MAJOR% GEQ 3 if %MINOR% GEQ 12 (
-    echo Python 3.12+ detected - using alternative installation...
+REM Try the official CPU wheel repository first
+echo Attempting to install prebuilt CPU wheel...
+pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+if errorlevel 1 (
+    echo.
+    echo First attempt failed, trying alternative community wheels...
     
-    REM Try to install from PyPI with binary-only
-    pip install llama-cpp-python --only-binary=:all: 2>nul
+    REM Try jllllll's community CPU wheels (these are very reliable)
+    pip install llama-cpp-python --prefer-binary --extra-index-url https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/AVX2/cpu
     
     if errorlevel 1 (
-        echo No prebuilt wheel available, installing without acceleration...
-        
-        REM Set environment variable to skip compilation
-        set CMAKE_ARGS="-DLLAMA_OPENBLAS=OFF -DLLAMA_BLAS=OFF -DLLAMA_CUBLAS=OFF"
-        set FORCE_CMAKE=1
-        
-        REM Install without any acceleration (pure Python fallback)
-        pip install llama-cpp-python --no-cache-dir
+        echo.
+        echo Trying basic CPU wheels (no AVX2)...
+        pip install llama-cpp-python --prefer-binary --extra-index-url https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/basic/cpu
         
         if errorlevel 1 (
-            echo ERROR: Installation failed
-            echo Please contact IT support
-            pause
-            exit /b 1
+            echo.
+            echo All prebuilt wheel sources failed.
+            echo Trying direct PyPI installation...
+            pip install llama-cpp-python --prefer-binary
+            
+            if errorlevel 1 (
+                echo.
+                echo ================================
+                echo  INSTALLATION FAILED
+                echo ================================
+                echo.
+                echo Could not install prebuilt llama-cpp-python wheels.
+                echo This usually means:
+                echo  1. Your Python version is not supported by prebuilt wheels
+                echo  2. Network/firewall is blocking the download
+                echo  3. No wheels exist for your system configuration
+                echo.
+                echo Python Version: %PYTHON_VERSION%
+                echo.
+                echo NEXT STEPS:
+                echo  1. Try using Python 3.11 or 3.12 (best wheel support)
+                echo  2. Check your internet connection and firewall
+                echo  3. Contact IT support with this error message
+                echo.
+                pause
+                exit /b 1
+            )
         )
-    )
-) else (
-    REM Python 3.11 or lower - use prebuilt wheels
-    pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-    if errorlevel 1 (
-        pip install llama-cpp-python
     )
 )
 
-echo llama-cpp-python installed successfully
+echo.
+echo llama-cpp-python installed successfully!
 echo.
 
 REM Install remaining requirements
 echo [5/5] Installing remaining requirements...
 if exist "requirements.txt" (
-    REM Install everything except llama-cpp-python (already installed)
+    REM Install everything except llama-cpp-python (already handled)
     findstr /v /i "llama-cpp-python" requirements.txt > requirements_temp.txt
     pip install -r requirements_temp.txt
     if errorlevel 1 (
@@ -241,6 +259,9 @@ echo.
 echo ================================
 echo  Setup Complete!
 echo ================================
+echo.
+echo Installed with CPU-only acceleration (no GPU required)
+echo This is perfect for most invoice extraction tasks.
 echo.
 echo To run the application, use: START_APP.bat
 echo.
