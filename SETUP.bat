@@ -130,30 +130,30 @@ pip install --upgrade pip
 echo.
 
 REM Install llama-cpp-python with PREBUILT CPU wheel (NO COMPILATION NEEDED)
-echo [4/5] Installing llama-cpp-python (CPU version)...
+echo [4/5] Installing llama-cpp-python (CPU version)
 echo This will download a prebuilt wheel - no compilation required!
 echo.
 
 REM Try the official CPU wheel repository first
-echo Attempting to install prebuilt CPU wheel...
+echo Attempting to install prebuilt CPU wheel
 pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
 if errorlevel 1 (
     echo.
-    echo First attempt failed, trying alternative community wheels...
+    echo First attempt failed, trying alternative community wheels
     
     REM Try jllllll's community CPU wheels (these are very reliable)
     pip install llama-cpp-python --prefer-binary --extra-index-url https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/AVX2/cpu
     
     if errorlevel 1 (
         echo.
-        echo Trying basic CPU wheels (no AVX2)...
+        echo Trying basic CPU wheels (no AVX2)
         pip install llama-cpp-python --prefer-binary --extra-index-url https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels/basic/cpu
         
         if errorlevel 1 (
             echo.
             echo All prebuilt wheel sources failed.
-            echo Trying direct PyPI installation...
+            echo Trying direct PyPI installation
             pip install llama-cpp-python --prefer-binary
             
             if errorlevel 1 (
@@ -201,7 +201,7 @@ if exist "requirements.txt" (
     del requirements_temp.txt
     echo Requirements installed successfully
 ) else (
-    echo WARNING: requirements.txt not found, skipping...
+            echo WARNING: requirements.txt not found, skipping
 )
 echo.
 
@@ -212,8 +212,8 @@ if not exist "app\models" (
 )
 
 REM Download model
-echo [6/6] Downloading Mistral-7B model...
-echo This may take several minutes (file size ~4GB)...
+echo [6/6] Downloading Mistral-7B model
+echo This may take several minutes (file size ~4GB)
 echo.
 
 set MODEL_URL=https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf?download=true
@@ -223,7 +223,7 @@ if exist "%MODEL_FILE%" (
     echo Model already exists at %MODEL_FILE%
     echo Skipping download...
 ) else (
-    echo Downloading to %MODEL_FILE%...
+    echo Downloading to %MODEL_FILE%
     
     REM Try curl first (Windows 10+)
     curl --version >nul 2>&1
@@ -238,7 +238,7 @@ if exist "%MODEL_FILE%" (
     
     :TRY_POWERSHELL
     REM Fallback to PowerShell
-    echo curl not found, trying PowerShell...
+    echo curl not found, trying PowerShell
     powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}; (New-Object System.Net.WebClient).DownloadFile('%MODEL_URL%', '%MODEL_FILE%')}"
     if errorlevel 1 (
         echo ERROR: Download failed with PowerShell
