@@ -187,10 +187,23 @@ echo llama-cpp-python installed successfully!
 echo.
 
 REM Install remaining requirements
-echo [5/5] Installing remaining requirements...
+echo [5/5] Installing remaining requirements
 if exist "requirements.txt" (
-    REM Install everything except llama-cpp-python (already handled)
-    findstr /v /i "llama-cpp-python" requirements.txt > requirements_temp.txt
+    echo Filtering out llama-cpp-python from requirements.txt
+    
+    REM Create filtered requirements file without llama-cpp-python or llama_cpp_python
+    type nul > requirements_temp.txt
+    for /f "delims=" %%a in (requirements.txt) do (
+        echo %%a | findstr /i /c:"llama-cpp-python" /c:"llama_cpp_python" >nul
+        if errorlevel 1 (
+            echo %%a >> requirements_temp.txt
+        ) else (
+            echo Skipping: %%a
+        )
+    )
+    
+    echo.
+    echo Installing remaining packages
     pip install -r requirements_temp.txt
     if errorlevel 1 (
         echo ERROR: Failed to install requirements
@@ -201,7 +214,7 @@ if exist "requirements.txt" (
     del requirements_temp.txt
     echo Requirements installed successfully
 ) else (
-            echo WARNING: requirements.txt not found, skipping
+    echo WARNING: requirements.txt not found, skipping
 )
 echo.
 
