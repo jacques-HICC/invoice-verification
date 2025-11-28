@@ -1,4 +1,8 @@
 @echo off
+
+REM Change to the directory where this script is located
+cd /d "%~dp0"
+
 echo ================================
 echo  Invoice Extractor Setup
 echo ================================
@@ -32,6 +36,18 @@ if errorlevel 1 (
 REM Detect Microsoft Store Python by checking the path
 for /f "tokens=*" %%i in ('python -c "import sys; print(sys.executable)"') do set PYTHON_PATH=%%i
 echo Python found at: %PYTHON_PATH%
+echo.
+
+REM Detect Python version
+for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
+echo Python version: %PYTHON_VERSION%
+
+REM Extract major.minor version (e.g., 3.13 -> MAJOR=3, MINOR=13)
+for /f "tokens=1,2 delims=." %%a in ("%PYTHON_VERSION%") do (
+    set MAJOR=%%a
+    set MINOR=%%b
+)
+echo Detected: Python %MAJOR%.%MINOR%
 echo.
 
 echo %PYTHON_PATH% | findstr /i "WindowsApps" >nul
@@ -114,20 +130,41 @@ pip install --upgrade pip
 echo.
 
 REM Install llama-cpp-python with prebuilt wheel FIRST (before requirements.txt)
-echo [4/5] Installing llama-cpp-python (prebuilt wheel - no compiler needed)...
-echo This may take a moment to download...
-pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-if errorlevel 1 (
-    echo ERROR: Failed to install llama-cpp-python
-    echo.
-    echo Trying alternative installation method...
-    pip install llama-cpp-python
+echo [4/5] Installing llama-cpp-python...
+echo Detected Python %PYTHON_VERSION%
+
+REM For Python 3.12+, we need to use a different approach
+if %MAJOR% GEQ 3 if %MINOR% GEQ 12 (
+    echo Python 3.12+ detected - using alternative installation...
+    
+    REM Try to install from PyPI with binary-only
+    pip install llama-cpp-python --only-binary=:all: 2>nul
+    
     if errorlevel 1 (
-        echo ERROR: Installation failed. Please check your internet connection.
-        pause
-        exit /b 1
+        echo No prebuilt wheel available, installing without acceleration...
+        
+        REM Set environment variable to skip compilation
+        set CMAKE_ARGS="-DLLAMA_OPENBLAS=OFF -DLLAMA_BLAS=OFF -DLLAMA_CUBLAS=OFF"
+        set FORCE_CMAKE=1
+        
+        REM Install without any acceleration (pure Python fallback)
+        pip install llama-cpp-python --no-cache-dir
+        
+        if errorlevel 1 (
+            echo ERROR: Installation failed
+            echo Please contact IT support
+            pause
+            exit /b 1
+        )
+    )
+) else (
+    REM Python 3.11 or lower - use prebuilt wheels
+    pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+    if errorlevel 1 (
+        pip install llama-cpp-python
     )
 )
+
 echo llama-cpp-python installed successfully
 echo.
 
