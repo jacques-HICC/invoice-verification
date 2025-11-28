@@ -58,7 +58,7 @@ if not errorlevel 1 (
 )
 
 REM Create virtual environment
-echo [1/4] Creating virtual environment...
+echo [1/5] Creating virtual environment...
 if not exist "venv" (
     python -m venv venv --without-pip
     if errorlevel 1 (
@@ -90,7 +90,7 @@ if not exist "venv" (
 echo.
 
 REM Activate virtual environment
-echo [2/4] Activating virtual environment...
+echo [2/5] Activating virtual environment...
 call venv\Scripts\activate.bat
 if errorlevel 1 (
     echo ERROR: Failed to activate virtual environment
@@ -108,16 +108,42 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Install requirements
-echo [3/4] Installing requirements...
-if exist "requirements.txt" (
-    pip install --upgrade pip
-    pip install -r requirements.txt
+REM Upgrade pip first
+echo [3/5] Upgrading pip...
+pip install --upgrade pip
+echo.
+
+REM Install llama-cpp-python with prebuilt wheel FIRST (before requirements.txt)
+echo [4/5] Installing llama-cpp-python (prebuilt wheel - no compiler needed)...
+echo This may take a moment to download...
+pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+if errorlevel 1 (
+    echo ERROR: Failed to install llama-cpp-python
+    echo.
+    echo Trying alternative installation method...
+    pip install llama-cpp-python
     if errorlevel 1 (
-        echo ERROR: Failed to install requirements
+        echo ERROR: Installation failed. Please check your internet connection.
         pause
         exit /b 1
     )
+)
+echo llama-cpp-python installed successfully
+echo.
+
+REM Install remaining requirements
+echo [5/5] Installing remaining requirements...
+if exist "requirements.txt" (
+    REM Install everything except llama-cpp-python (already installed)
+    findstr /v /i "llama-cpp-python" requirements.txt > requirements_temp.txt
+    pip install -r requirements_temp.txt
+    if errorlevel 1 (
+        echo ERROR: Failed to install requirements
+        del requirements_temp.txt
+        pause
+        exit /b 1
+    )
+    del requirements_temp.txt
     echo Requirements installed successfully
 ) else (
     echo WARNING: requirements.txt not found, skipping...
@@ -131,7 +157,7 @@ if not exist "app\models" (
 )
 
 REM Download model
-echo [4/4] Downloading Mistral-7B model...
+echo [6/6] Downloading Mistral-7B model...
 echo This may take several minutes (file size ~4GB)...
 echo.
 
