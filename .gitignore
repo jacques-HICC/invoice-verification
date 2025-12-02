@@ -8,7 +8,6 @@ temp/
 
 *.pdf
 *.json
-*.png
 *.jpg
 
 *.gguf
