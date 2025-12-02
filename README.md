@@ -187,7 +187,10 @@ class GCDocsConfig:
 
 1. **Install Python from the Company Portal**
 
-2. **Clone this repository onto your system by navigating to the target directory in cmd and using:**
+2. **Download the zip file or clone this repository onto your system by navigating to the target directory in cmd and using:**
+    Download and unzip the archive:
+    ![Zip File](assets/zipfile_instructions.png)
+    
     DevOps:
     ```bash
     git clone https://INFC-Hub@dev.azure.com/INFC-Hub/Data%20Science/_git/invoice-verification
@@ -196,6 +199,7 @@ class GCDocsConfig:
     ```bash
     git clone https://github.com/jacques-HICC/invoice-verification.git
     ```
+  
 
 3. **Double click on SETUP.bat for first time setup**
 
